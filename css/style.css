@@ -1,0 +1,39 @@
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0; background: #f4f6f8; color: #222;
+}
+nav {
+  background: #183153; padding: 10px 20px; color: #fff; display: flex; justify-content: space-between; align-items: center;
+}
+nav a {
+  color: #fff; text-decoration: none; margin-right: 15px;
+}
+nav button {
+  background: #ee2e2d; border: none; padding: 6px 15px; color: white; cursor: pointer; border-radius: 5px;
+}
+main {
+  padding: 30px;
+}
+.cards {
+  display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 30px;
+}
+.card {
+  background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 15px rgb(0 0 0 / 0.1); flex: 1 1 300px;
+}
+#status {
+  font-size: 16px; color: #333;
+  margin-bottom: 15px;
+}
+#genStatus {
+  border: 1px solid #ddd; background: #fff; border-radius: 8px;
+  padding: 10px; max-width: 900px;
+}
+table {
+  border-collapse: collapse; width: 100%; background: white; border-radius: 10px; overflow: hidden;
+}
+thead tr {
+  background: #183153; color: white;
+}
+th, td {
+  padding: 12px; text-align: center; border-bottom: 1px solid #ddd;
+}
