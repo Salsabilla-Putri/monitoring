@@ -1,0 +1,117 @@
+/* sidebar.css */
+:root {
+    --primary: #1745a5;
+    --primary-light: #3b6bdf;
+    --secondary: #10b981;
+    --secondary-dark: #047857;
+    --warning: #f97316;
+    --danger: #ef4444;
+    --muted: #6b7280;
+    --light: #f8fafc;
+    --dark: #0f172a;
+    --card-bg: #fff;
+    --accent: #1745a5;
+}
+
+/* Sidebar Styles */
+.sidebar {
+    width: 80px;
+    background: #183153;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 20px;
+    position: fixed;
+    height: 100vh;
+    overflow-y: auto;
+    box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    transition: width 0.3s ease;
+}
+
+.sidebar:hover {
+    width: 220px;
+}
+
+.logo {
+    width: 50px;
+    margin-bottom: 30px;
+    background: white;
+    border-radius: 10px;
+}
+.menu-item.logout a {
+  color: #ff4444;
+  font-weight: 600;
+}
+
+.menu-item.logout a:hover {
+  background: #ffdddd;
+}
+
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    color: white;
+    text-decoration: none;
+    padding: 12px 15px;
+    margin: 4px 0;
+    border-radius: 8px;
+    width: 90%;
+    font-size: 14px;
+    transition: all 0.3s;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.nav-item:hover, .nav-item.active {
+    background: var(--primary-light);
+    transform: translateX(5px);
+}
+
+.nav-icon {
+    font-size: 20px;
+    margin-right: 15px;
+    min-width: 24px;
+    text-align: center;
+}
+
+.nav-text {
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.sidebar:hover .nav-text {
+    opacity: 1;
+}
+
+/* Main Content Styles */
+.main-content {
+    flex: 1;
+    margin-left: 80px;
+    padding: 20px;
+    transition: margin-left 0.3s ease;
+}
+
+.sidebar:hover ~ .main-content {
+    margin-left: 220px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 60px;
+    }
+    
+    .sidebar:hover {
+        width: 220px;
+    }
+    
+    .main-content {
+        margin-left: 60px;
+    }
+    
+    .sidebar:hover ~ .main-content {
+        margin-left: 220px;
+    }
+}

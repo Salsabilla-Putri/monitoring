@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Gen-Track — Engine Status</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;">
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="sidebar.css">
+  
+  <style>
+    /* === Base layout (sidebar / topbar / main) === */
+    :root{ --green:#10b981; --green-dark:#047857; --orange:#f97316; --red:#ef4444; --muted:#6b7280; --card-bg:#fff; --accent:#1745a5; }
+    body { margin:0; font-family: Inter, system-ui, -apple-system, sans-serif; background:#f1f5f9; color:#0f172a; }
+    .container { display: flex; min-height: 100vh; }
+
+    /* LAYOUT & TOPBAR */
+    .main-content { flex: 1; margin-left: 80px; padding: 20px; padding-top: 80px; transition: margin-left 0.3s ease; }
+    .sidebar:hover ~ .main-content { margin-left: 220px; }
+    .topbar { position: fixed; top: 0; left: 80px; right: 0; height: 60px; background: white; border-bottom: 1px solid #d0d7e1; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; z-index: 20; transition: left 0.3s ease; }
+    .sidebar:hover ~ .topbar { left: 220px; }
+    .topbar-title { font-size:20px; font-weight:bold; color:#183153; }
+    .topbar-user { background:#183153; color:white; padding:8px 16px; border-radius:20px; font-size:14px; cursor:pointer; display: flex; align-items: center; gap: 8px; }
+
+    /* CARDS & GRID */
+    .card { background:var(--card-bg); border-radius:12px; padding:18px; box-shadow:0 6px 20px rgba(11,50,93,0.06); }
+    .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); }
+
+    /* PARAM BOX */
+    .param-box { background:#f9fafb; padding:14px; border-radius:10px; text-align:center; position:relative; transition: box-shadow .18s, border .18s; }
+    .param-box h4 { margin:6px 0 8px 0; color:var(--accent); font-size:14px; font-weight:700; }
+    .param-val { font-size:1.6em; font-weight:800; margin-bottom:8px; color:#0f172a; }
+    .param-val.numeric { font-size:2.1em; }
+
+    /* GAUGE */
+    .gauge { width:120px; height:60px; background:#e5e7eb; border-radius:120px 120px 0 0; overflow:hidden; margin:8px auto 6px auto; position:relative; }
+    .gauge-fill { position:absolute; bottom:0; left:0; width:100%; height:100%; transform-origin:center bottom; transform:rotate(0deg); transition: transform 0.6s cubic-bezier(.2,.9,.2,1), background .25s; background:linear-gradient(180deg,#34d399,#10b981); }
+    .gauge-cover { width:76px; height:40px; background:var(--card-bg); border-radius:80px 80px 0 0; position:absolute; bottom:0; left:50%; transform:translateX(-50%); }
+
+    /* BARS */
+    .bar-wrap { position:relative; width:100%; height:16px; background:#e9eef7; border-radius:10px; overflow:hidden; margin:8px 0; }
+    .bar-fill { position:absolute; top:0; left:0; height:100%; width:0%; transition:width .45s, background .25s; background:#4ade80; }
+
+    /* BUTTONS & BADGES */
+    .thr-btn { margin-top:8px; padding:7px 10px; font-size:13px; border:none; background:var(--accent); color:white; border-radius:7px; cursor:pointer; }
+    .thr-badge { font-size:12px; color:var(--muted); margin-top:8px; }
+    
+    /* INDICATORS */
+    .indicator { display:inline-block; padding:6px 10px; border-radius:8px; font-weight:700; }
+    .ind-on { background:#d1fae5; color:#064e3b; }
+    .ind-off { background:#fee2e2; color:#7f1d1d; }
+    .ind-neutral { background:#f3f4f6; color:#374151; }
+
+    /* ALERTS TABLE */
+    .alerts-card { margin-top:18px; padding:16px; border-radius:10px; background:var(--card-bg); box-shadow:0 6px 24px rgba(11,50,93,0.04); }
+    table.alert-table { width:100%; border-collapse:collapse; margin-top:6px; }
+    table.alert-table th, table.alert-table td { text-align:left; padding:8px; border-bottom:1px solid #eef4fb; font-size:13px; }
+    table.alert-table th { background:#f7fbff; font-weight:700; color:#123; }
+
+    /* STATES */
+    .normal { color:#0f172a !important; }
+    .warning { color:var(--orange) !important; }
+    .alert { color:var(--red) !important; }
+    .box-ok { box-shadow:0 2px 6px rgba(2,6,23,0.04); border: none; }
+    .box-warn { box-shadow:0 0 0 3px rgba(249,115,22,0.12); border:1px solid rgba(249,115,22,0.12); }
+    .box-alert{ box-shadow:0 0 0 3px rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.12); }
+
+    /* MODAL */
+    .modal-bg { display:none; position:fixed; inset:0; background:rgba(2,6,23,0.4); align-items:center; justify-content:center; z-index:9999; }
+    .modal-card { width:380px; background:white; padding:14px; border-radius:10px; box-shadow:0 8px 36px rgba(2,6,23,0.18); }
+    .modal-row { margin-bottom:10px; }
+    .modal-row label { display:block; font-size:13px; margin-bottom:6px; color:#263238; }
+    .modal-row input { width:100%; padding:8px 10px; border-radius:8px; border:1px solid #e6eef8; }
+    .modal-footer { display:flex; gap:8px; margin-top:8px; }
+
+    @media (max-width: 768px) {
+      .main-content { margin-left: 60px; }
+      .sidebar:hover ~ .main-content { margin-left: 220px; }
+      .topbar { left: 60px; }
+      .sidebar:hover ~ .topbar { left: 220px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="sidebar-container"></div>
+
+    <div class="topbar">
+      <div class="topbar-title">Engine Real-Time Status</div>
+      <div style="display:flex; align-items:center; gap:15px;">
+        <div id="apiStatus" style="font-size:12px; color:var(--muted);">Connecting...</div>
+        <div id="userarea" class="topbar-user">
+          <i class="fas fa-user"></i> <span>Operator</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; color:var(--accent)">Engine Parameters</h3>
+            <div style="display:flex; gap:12px; align-items:center;">
+                <div style="font-weight:700; color:var(--accent)">Sync Status:</div>
+                <div id="syncIndicator" class="indicator ind-neutral">--</div>
+                <div style="font-weight:700; color:var(--accent)">Last Update:</div>
+                <div id="lastUpdate" class="indicator ind-neutral">--:--:--</div>
+            </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="param-box box-ok" id="box_volt">
+          <h4>Voltage (V)</h4>
+          <div id="voltVal" class="param-val numeric normal">--</div>
+          <button class="thr-btn" onclick="openThresholdModal('volt')">Set Threshold</button>
+          <div class="thr-badge" id="thr_volt"></div>
+        </div>
+
+        <div class="param-box box-ok" id="box_amp">
+          <h4>Current (A)</h4>
+          <div id="ampVal" class="param-val numeric normal">--</div>
+          <button class="thr-btn" onclick="openThresholdModal('amp')">Set Threshold</button>
+          <div class="thr-badge" id="thr_amp"></div>
+        </div>
+
+        <div class="param-box box-ok" id="box_freq">
+          <h4>Frequency (Hz)</h4>
+          <div id="freqVal" class="param-val numeric normal">--</div>
+          <button class="thr-btn" onclick="openThresholdModal('freq')">Set Threshold</button>
+          <div class="thr-badge" id="thr_freq"></div>
+        </div>
+
+        <div class="param-box box-ok" id="box_power">
+          <h4>Power (W)</h4>
+          <div id="powerVal" class="param-val numeric normal">--</div>
+        </div>
+        
+        <div class="param-box box-ok" id="box_oil">
+          <h4>Oil Pressure (PSI)</h4>
+          <div class="bar-wrap"><div id="oilBar" class="bar-fill" style="width: 0%"></div></div>
+          <div id="oilVal" class="param-val">--</div>
+          <button class="thr-btn" onclick="openThresholdModal('oil')">Set Threshold</button>
+          <div class="thr-badge" id="thr_oil"></div>
+        </div>
+
+        <div class="param-box box-ok" id="box_coolant">
+          <h4>Coolant Temp (°C)</h4>
+          <div class="bar-wrap"><div id="coolantBar" class="bar-fill" style="width: 0%"></div></div>
+          <div id="coolantVal" class="param-val">--</div>
+          <button class="thr-btn" onclick="openThresholdModal('coolant')">Set Threshold</button>
+          <div class="thr-badge" id="thr_coolant"></div>
+        </div>
+
+        <div class="param-box box-ok" id="box_iat">
+          <h4>Intake Air Temp (°C)</h4>
+          <div class="bar-wrap"><div id="iatBar" class="bar-fill" style="width: 0%"></div></div>
+          <div id="iatVal" class="param-val">--</div>
+          <button class="thr-btn" onclick="openThresholdModal('iat')">Set Threshold</button>
+          <div class="thr-badge" id="thr_iat"></div>
+        </div>
+
+        <div class="param-box box-ok" id="box_map">
+          <h4>MAP (kPa)</h4>
+          <div class="bar-wrap"><div id="mapBar" class="bar-fill" style="width: 0%"></div></div>
+          <div id="mapVal" class="param-val">--</div>
+          <button class="thr-btn" onclick="openThresholdModal('map')">Set Threshold</button>
+          <div class="thr-badge" id="thr_map"></div>
+        </div>
+
+        <div class="param-box box-ok" id="box_fuel">
+          <h4>Fuel Level (%)</h4>
+          <div class="bar-wrap"><div id="fuelBar" class="bar-fill" style="width: 0%"></div></div>
+          <div id="fuelVal" class="param-val">--</div>
+          <button class="thr-btn" onclick="openThresholdModal('fuel')">Set Threshold</button>
+          <div class="thr-badge" id="thr_fuel"></div>
+        </div>
+
+        <div class="param-box box-ok" id="box_rpm">
+          <h4>RPM</h4>
+          <div id="rpmVal" class="param-val">--</div>
+          <div class="gauge"><div id="gauge-rpm" class="gauge-fill"></div><div class="gauge-cover"></div></div>
+          <button class="thr-btn" onclick="openThresholdModal('rpm')">Set Threshold</button>
+          <div class="thr-badge" id="thr_rpm"></div>
+        </div>
+
+        <div class="param-box box-ok" id="box_afr">
+          <h4>Air Fuel Ratio (AFR)</h4>
+          <div id="afrVal" class="param-val">--</div>
+          <div class="gauge"><div id="gauge-afr" class="gauge-fill"></div><div class="gauge-cover"></div></div>
+          <button class="thr-btn" onclick="openThresholdModal('afr')">Set Threshold</button>
+          <div class="thr-badge" id="thr_afr"></div>
+        </div>
+
+        <div class="param-box box-ok" id="box_tps">
+          <h4>Throttle Position (%)</h4>
+          <div id="tpsVal" class="param-val">--</div>
+          <div class="gauge"><div id="gauge-tps" class="gauge-fill"></div><div class="gauge-cover"></div></div>
+          <button class="thr-btn" onclick="openThresholdModal('tps')">Set Threshold</button>
+          <div class="thr-badge" id="thr_tps"></div>
+        </div>
+      </div>
+
+      <div class="alerts-card">
+        <h3 style="margin:0 0 8px 0; color:var(--accent)">Recent Alerts (Database)</h3>
+        <table class="alert-table">
+          <thead><tr><th style="width:180px">Time</th><th>Parameter</th><th>Value</th><th>Message</th></tr></thead>
+          <tbody id="alertTable">
+            <tr><td colspan="4" style="text-align:center; color:#999">Loading alerts...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="thresholdModal" class="modal-bg">
+    <div class="modal-card">
+      <h3 id="modalParamTitle" style="margin-top:0">Set Threshold</h3>
+      <div class="modal-row">
+        <label>Parameter: <b id="modalParamName"></b></label>
+      </div>
+      <div class="modal-row">
+        <label>Minimum (optional)</label>
+        <input id="thrMin" type="number" placeholder="e.g. 10" />
+      </div>
+      <div class="modal-row">
+        <label>Maximum (optional)</label>
+        <input id="thrMax" type="number" placeholder="e.g. 100" />
+      </div>
+      <div class="modal-footer">
+        <button onclick="saveThreshold()" class="thr-btn" style="background:#10b981; flex:1">Save</button>
+        <button onclick="removeThreshold()" class="thr-btn" style="background:#ef4444; flex:1">Clear</button>
+        <button onclick="closeModal()" class="thr-btn" style="background:#64748b; flex:1">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // === CONFIGURATION ===
+    const API_URL = '/api';
+    const PARAMS = ['volt','amp','power','freq','rpm','oil','coolant','iat','fuel','afr','map','tps'];
+    
+    // Variabel untuk menyimpan threshold dari Server
+    let serverThresholds = {}; 
+    let activeModalParam = null;
+
+    // === DATA FETCHING ===
+    
+    // 1. Fetch Thresholds dari Server (Dipanggil saat start)
+    async function loadThresholds() {
+        try {
+            const res = await fetch(`${API_URL}/thresholds`);
+            const json = await res.json();
+            if (json.success) {
+                serverThresholds = json.data;
+                updateThresholdBadges();
+            }
+        } catch (e) { console.error("Load config error:", e); }
+    }
+
+    // 2. Fetch Data Engine
+    async function fetchData() {
+        try {
+            const res = await fetch(`${API_URL}/engine-data/latest`);
+            const json = await res.json();
+            
+            if (json.success) {
+                updateDashboard(json.data);
+                document.getElementById('apiStatus').innerHTML = '<span style="color:#10b981">● Live</span>';
+            }
+        } catch (err) {
+            document.getElementById('apiStatus').innerHTML = '<span style="color:#ef4444">● Offline</span>';
+        }
+    }
+
+    async function fetchAlerts() {
+        try {
+            const res = await fetch(`${API_URL}/alerts?limit=5`);
+            const json = await res.json();
+            if (json.success) renderAlerts(json.data);
+        } catch (e) { console.error(e); }
+    }
+
+    // === UI UPDATE LOGIC ===
+
+    function updateDashboard(data) {
+        document.getElementById('lastUpdate').innerText = new Date().toLocaleTimeString();
+        const syncEl = document.getElementById('syncIndicator');
+        syncEl.innerText = data.sync || 'UNKNOWN';
+        syncEl.className = data.sync === 'ON-GRID' ? 'indicator ind-on' : 'indicator ind-off';
+
+        const setVal = (id, val, fixed=0) => {
+            const el = document.getElementById(id + 'Val');
+            if(el) el.innerText = Number(val).toFixed(fixed);
+        };
+
+        setVal('volt', data.volt, 1);
+        setVal('amp', data.amp, 1);
+        setVal('freq', data.freq, 2);
+        setVal('power', data.power, 0);
+        setVal('oil', data.oil, 0);
+        setVal('coolant', data.coolant || data.temp, 0);
+        setVal('iat', data.iat, 0);
+        setVal('map', data.map, 0);
+        setVal('fuel', data.fuel, 0);
+        setVal('rpm', data.rpm, 0);
+        setVal('afr', data.afr, 1);
+        setVal('tps', data.tps, 0);
+
+        applyVisual('rpm', data.rpm, { type: 'gauge', max: 4500 });
+        applyVisual('afr', data.afr, { type: 'gauge', max: 20 });
+        applyVisual('tps', data.tps, { type: 'gauge', max: 100 });
+        applyVisual('oil', data.oil, { type: 'bar', max: 100 });
+        applyVisual('coolant', data.coolant || data.temp, { type: 'bar', max: 120 });
+        applyVisual('iat', data.iat, { type: 'bar', max: 100 });
+        applyVisual('map', data.map, { type: 'bar', max: 250 });
+        applyVisual('fuel', data.fuel, { type: 'bar', max: 100 });
+        applyVisual('volt', data.volt, { type: 'text' });
+        applyVisual('amp', data.amp, { type: 'text' });
+        applyVisual('freq', data.freq, { type: 'text' });
+    }
+
+    function applyVisual(param, value, opts) {
+        const val = Number(value);
+        const th = serverThresholds[param] || {};
+        let status = 'normal';
+
+        // Logic Visual sesuai Threshold Server
+        if (th.max && val > th.max) status = 'alert';
+        else if (th.min && val < th.min) status = 'alert';
+        
+        const box = document.getElementById('box_' + param);
+        if (box) box.className = `param-box ${status === 'alert' ? 'box-alert' : 'box-ok'}`;
+        
+        const text = document.getElementById(param + 'Val');
+        if(text) text.className = `param-val ${opts.type==='text'?'numeric':''} ${status}`;
+
+        if (opts.type === 'gauge') {
+            const el = document.getElementById('gauge-' + param);
+            if(el) {
+                let ratio = Math.min(Math.max(val / opts.max, 0), 1);
+                el.style.transform = `rotate(${ratio * 180}deg)`;
+                el.style.background = status === 'alert' ? 'linear-gradient(180deg, #ef4444, #b91c1c)' : 'linear-gradient(180deg, #34d399, #10b981)';
+            }
+        } else if (opts.type === 'bar') {
+            const el = document.getElementById(param + 'Bar');
+            if(el) {
+                let pct = Math.min(Math.max(val / opts.max * 100, 0), 100);
+                el.style.width = `${pct}%`;
+                el.style.background = status === 'alert' ? '#ef4444' : '#4ade80';
+            }
+        }
+    }
+
+    function renderAlerts(alerts) {
+        const tbody = document.getElementById('alertTable');
+        if (alerts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:10px;">No recent alerts</td></tr>';
+            return;
+        }
+        tbody.innerHTML = alerts.map(a => `
+            <tr>
+                <td>${new Date(a.timestamp).toLocaleTimeString()}</td>
+                <td><b>${a.parameter ? a.parameter.toUpperCase() : 'SYS'}</b></td>
+                <td>${a.value}</td>
+                <td style="color:${a.severity==='critical'?'red':'orange'}; font-weight:bold">${a.message}</td>
+            </tr>
+        `).join('');
+    }
+
+    // === THRESHOLD MODAL & API SAVE ===
+    
+    function updateThresholdBadges() {
+        PARAMS.forEach(p => {
+            const el = document.getElementById('thr_' + p);
+            if(!el) return;
+            const t = serverThresholds[p];
+            if(t) {
+                let txt = '';
+                if(t.min) txt += `Min: ${t.min} `;
+                if(t.max) txt += `Max: ${t.max}`;
+                el.innerText = txt || 'No Limit';
+            } else {
+                el.innerText = 'No Limit';
+            }
+        });
+    }
+
+    window.openThresholdModal = (param) => {
+        activeModalParam = param;
+        document.getElementById('modalParamName').innerText = param.toUpperCase();
+        const t = serverThresholds[param] || {};
+        document.getElementById('thrMin').value = t.min || '';
+        document.getElementById('thrMax').value = t.max || '';
+        document.getElementById('thresholdModal').style.display = 'flex';
+    };
+
+    window.closeModal = () => {
+        document.getElementById('thresholdModal').style.display = 'none';
+    };
+
+    // FUNGSI SAVE KE SERVER (PENTING!)
+    window.saveThreshold = async () => {
+        const minVal = document.getElementById('thrMin').value;
+        const maxVal = document.getElementById('thrMax').value;
+        
+        // Buat payload update
+        const payload = {};
+        payload[activeModalParam] = {};
+        
+        if(minVal) payload[activeModalParam].min = Number(minVal);
+        if(maxVal) payload[activeModalParam].max = Number(maxVal);
+
+        try {
+            // Kirim ke Backend
+            const res = await fetch(`${API_URL}/thresholds`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+
+            if (json.success) {
+                // Update local memory & UI
+                serverThresholds = json.data;
+                updateThresholdBadges();
+                closeModal();
+                alert('Threshold saved to Server!');
+            }
+        } catch (e) {
+            alert('Failed to save threshold');
+            console.error(e);
+        }
+    };
+
+    window.removeThreshold = async () => {
+        // Untuk menghapus, kita kirim objek kosong untuk param tersebut
+        const payload = {};
+        payload[activeModalParam] = {}; // empty object means no limits
+
+        try {
+            const res = await fetch(`${API_URL}/thresholds`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+            if (json.success) {
+                serverThresholds = json.data;
+                updateThresholdBadges();
+                closeModal();
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    // === INITIALIZATION ===
+    document.addEventListener('DOMContentLoaded', () => {
+        // Sidebar
+        fetch('sidebar.html').then(r=>r.text()).then(h=>document.getElementById('sidebar-container').innerHTML=h);
+        document.getElementById('userarea').querySelector('span').innerText = localStorage.getItem('userRole') || 'Operator';
+
+        // 1. Load Thresholds First
+        loadThresholds();
+
+        // 2. Start Polling Data
+        fetchData();
+        fetchAlerts();
+        setInterval(fetchData, 2000); 
+        setInterval(fetchAlerts, 5000); 
+    });
+</script>
+</body>
+</html>

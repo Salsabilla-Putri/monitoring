@@ -1,0 +1,1656 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gen-Track — Engine Activity Summary</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #1745a5;
+            --primary-light: #3b6bdf;
+            --secondary: #10b981;
+            --secondary-dark: #047857;
+            --warning: #f97316;
+            --danger: #ef4444;
+            --muted: #6b7280;
+            --light: #f8fafc;
+            --dark: #0f172a;
+            --card-bg: #fff;
+            --accent: #1745a5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background:#f1f5f9;
+            color:#0f172a;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: 80px;
+            background: #183153;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            transition: width 0.3s ease;
+        }
+
+        .sidebar:hover {
+            width: 220px;
+        }
+
+        .logo {
+            width: 50px;
+            margin-bottom: 30px;
+            background: white;
+            border-radius: 10px;
+            padding: 5px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            color: white;
+            text-decoration: none;
+            padding: 12px 15px;
+            margin: 4px 0;
+            border-radius: 8px;
+            width: 90%;
+            font-size: 14px;
+            transition: all 0.3s;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: var(--primary-light);
+            transform: translateX(5px);
+        }
+
+        .nav-icon {
+            font-size: 20px;
+            margin-right: 15px;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .nav-text {
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .sidebar:hover .nav-text {
+            opacity: 1;
+        }
+
+        /* Main Content Styles */
+        .main-content {
+            flex: 1;
+            margin-left: 80px;
+            padding: 20px;
+            transition: margin-left 0.3s ease;
+        }
+
+        .sidebar:hover ~ .main-content {
+            margin-left: 220px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .header h1 {
+            color: var(--primary);
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .header-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .user-info {
+            background: var(--primary);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .date-info {
+            color: var(--muted);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Overview Cards */
+        .overview-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .overview-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .overview-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .overview-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            color: white;
+        }
+
+        .overview-icon.primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        }
+
+        .overview-icon.secondary {
+            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
+        }
+
+        .overview-icon.warning {
+            background: linear-gradient(135deg, var(--warning), #fdba74);
+        }
+
+        .overview-icon.danger {
+            background: linear-gradient(135deg, var(--danger), #fca5a5);
+        }
+
+        .overview-content {
+            flex: 1;
+        }
+
+        .overview-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .overview-label {
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        /* Executive Summary Section */
+        .executive-summary {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            color: var(--primary);
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title i {
+            font-size: 28px;
+        }
+
+        /* Sensors Grid */
+        .sensors-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 25px;
+        }
+
+        .sensor-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s, box-shadow 0.3s;
+            border-left: 5px solid var(--primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sensor-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .sensor-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(90deg, var(--primary), var(--primary-light));
+        }
+
+        .sensor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .sensor-name {
+            font-weight: 700;
+            color: var(--primary);
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sensor-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: var(--light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-size: 18px;
+        }
+
+        .sensor-status {
+            font-size: 14px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .status-normal {
+            background: #d1fae5;
+            color: var(--secondary-dark);
+        }
+
+        .status-warning {
+            background: #fed7aa;
+            color: var(--warning);
+        }
+
+        .status-critical {
+            background: #fecaca;
+            color: var(--danger);
+        }
+
+        .sensor-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .sensor-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .warning-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .warning-zero {
+            color: var(--secondary);
+        }
+
+        .warning-nonzero {
+            color: var(--danger);
+        }
+
+        .last-updated {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        /* Statistics Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--accent);
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--muted);
+        }
+
+        /* Filter Section */
+        .filter-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .time-filter {
+            display: flex;
+            gap: 10px;
+        }
+
+        .time-btn {
+            padding: 8px 16px;
+            background: #f1f5f9;
+            border: 1px solid #d0d7e1;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .time-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .date-range {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .date-selector {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .date-selector select {
+            padding: 6px 10px;
+            border: 1px solid #d0d7e1;
+            border-radius: 4px;
+            background: white;
+        }
+
+        .apply-btn {
+            padding: 8px 16px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* Chart Container Styles */
+        .chart-container {
+            display: none;
+            height: 400px;
+            margin-top: 20px;
+            position: relative;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .chart-title {
+            color: var(--accent);
+            font-size: 18px;
+        }
+
+        .chart-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chart-action-btn {
+            padding: 6px 12px;
+            background: #f1f5f9;
+            border: 1px solid #d0d7e1;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+
+        .chart-action-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        /* Export Options */
+        .export-options {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .export-options h4 {
+            margin-bottom: 10px;
+            color: var(--accent);
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .export-btn {
+            padding: 8px 16px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .export-btn:hover {
+            background: #0f2d7a;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--muted);
+        }
+
+        .loading i {
+            margin-right: 10px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 1200px) {
+            .sensors-grid {
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 60px;
+            }
+            
+            .sidebar:hover {
+                width: 220px;
+            }
+            
+            .main-content {
+                margin-left: 60px;
+            }
+            
+            .sidebar:hover ~ .main-content {
+                margin-left: 220px;
+            }
+            
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            
+            .header-info {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .overview-cards {
+                grid-template-columns: 1fr;
+            }
+            
+            .sensors-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .sensor-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-section {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            
+            .date-range {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <img src="images/gms-logo.png" alt="Logo" class="logo">
+            <a href="index.html" class="nav-item">
+                <span class="nav-icon"><i class="fas fa-home"></i></span>
+                <span class="nav-text">Dashboard</span>
+            </a>
+            <a href="engine.html" class="nav-item">
+                <span class="nav-icon"><i class="fas fa-cogs"></i></span>
+                <span class="nav-text">Engine</span>
+            </a>
+            <a href="history.html" class="nav-item">
+                <span class="nav-icon"><i class="fas fa-history"></i></span>
+                <span class="nav-text">History</span>
+            </a>
+            <a href="maintenance.html" class="nav-item">
+                <span class="nav-icon"><i class="fas fa-tools"></i></span>
+                <span class="nav-text">Maintenance</span>
+            </a>
+            <a href="alarm.html" class="nav-item">
+                <span class="nav-icon"><i class="fas fa-bell"></i></span>
+                <span class="nav-text">Alarms</span>
+            </a>
+            <a href="reports.html" class="nav-item active">
+                <span class="nav-icon"><i class="fas fa-chart-bar"></i></span>
+                <span class="nav-text">Reports</span>
+            </a>
+            <a href="logout.html" class="nav-item">
+                <span class="nav-icon"><i class="fas fa-sign-out-alt"></i></span>
+                <span class="nav-text">Logout</span>
+            </a>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <div class="header">
+                <h1>Reports</h1>
+                <div class="header-info">
+                    <div class="user-info">
+                        <span>Operator</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overview Cards -->
+            <div class="overview-cards">
+                <div class="overview-card">
+                    <div class="overview-icon primary">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="overview-content">
+                        <div class="overview-value" id="dailyAverage">-- hrs</div>
+                        <div class="overview-label">Daily Average</div>
+                    </div>
+                </div>
+                <div class="overview-card">
+                    <div class="overview-icon secondary">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                    <div class="overview-content">
+                        <div class="overview-value" id="totalHours">-- hrs</div>
+                        <div class="overview-label">Total Hours (7 days)</div>
+                    </div>
+                </div>
+                <div class="overview-card">
+                    <div class="overview-icon warning">
+                        <i class="fas fa-calendar-day"></i>
+                    </div>
+                    <div class="overview-content">
+                        <div class="overview-value" id="daysActive">-- days</div>
+                        <div class="overview-label">Days Active (7 days)</div>
+                    </div>
+                </div>
+                <div class="overview-card">
+                    <div class="overview-icon danger">
+                        <i class="fas fa-hourglass-end"></i>
+                    </div>
+                    <div class="overview-content">
+                        <div class="overview-value" id="longestSession">-- hrs</div>
+                        <div class="overview-label">Longest Session</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Engine Parameters Section -->
+            <div class="executive-summary">
+                <h2 class="section-title">
+                    <i class="fas fa-cogs"></i>
+                    Engine Parameters (Last 24 Hours)
+                </h2>
+                
+                <div id="sensorsLoading" class="loading">
+                    <i class="fas fa-spinner fa-spin"></i> Loading sensor data...
+                </div>
+                
+                <div id="sensorsContainer" class="sensors-grid" style="display: none;">
+                    <!-- Sensor cards will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Chart Section -->
+            <div class="executive-summary">
+                <h2 class="section-title">
+                    <i class="fas fa-chart-line"></i>
+                    Sensor Trends
+                </h2>
+
+                <!-- Filter Section -->
+                <div class="filter-section">
+                    <div class="time-filter">
+                        <button class="time-btn active" data-hours="24">Last 24h</button>
+                        <button class="time-btn" data-hours="168">Last 7d</button>
+                        <button class="time-btn" data-hours="720">Last 30d</button>
+                        <button class="time-btn" data-hours="8760">Year to Date</button>
+                    </div>
+                    <div class="date-range">
+                        <div class="date-selector">
+                            <div>
+                                <label>Start Date</label>
+                                <div style="display: flex; gap: 5px; margin-top: 5px;">
+                                    <select id="start-year">
+                                        <option value="">Year</option>
+                                    </select>
+                                    <select id="start-month">
+                                        <option value="">Month</option>
+                                    </select>
+                                    <select id="start-day">
+                                        <option value="">Day</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="align-self: center; margin: 0 10px;">to</div>
+                            <div>
+                                <label>End Date</label>
+                                <div style="display: flex; gap: 5px; margin-top: 5px;">
+                                    <select id="end-year">
+                                        <option value="">Year</option>
+                                    </select>
+                                    <select id="end-month">
+                                        <option value="">Month</option>
+                                    </select>
+                                    <select id="end-day">
+                                        <option value="">Day</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="apply-btn" id="applyDateRange">Apply</button>
+                    </div>
+                </div>
+
+                <!-- Chart Container (Initially Hidden) -->
+                <div id="chartContainer" class="chart-container">
+                    <div class="chart-header">
+                        <h3 class="chart-title" id="chartTitle">Sensor Data</h3>
+                        <div class="chart-actions">
+                            <button class="chart-action-btn" id="toggleExport">Export Data</button>
+                            <button class="chart-action-btn" id="printChart">Print</button>
+                        </div>
+                    </div>
+                    <canvas id="mainChart"></canvas>
+                    
+                    <!-- Export Options -->
+                    <div id="exportOptions" class="export-options">
+                        <h4>Export Data</h4>
+                        <div class="export-buttons">
+                            <button class="export-btn" data-format="csv">CSV</button>
+                            <button class="export-btn" data-format="json">JSON</button>
+                            <button class="export-btn" data-format="png">PNG Image</button>
+                            <button class="export-btn" data-format="pdf">PDF</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API Configuration
+        const API_URL = '/api';
+        
+        // Sensor mapping configuration
+        const sensorConfig = {
+            'rpm': {
+                name: 'Revolution Per Minutes',
+                icon: 'fas fa-tachometer-alt',
+                field: 'rpm',
+                unit: 'rpm',
+                maxValue: 4500,
+                decimal: 0
+            },
+            'iat': {
+                name: 'Intake Air Temperature',
+                icon: 'fas fa-wind',
+                field: 'iat',
+                unit: '°C',
+                maxValue: 100,
+                decimal: 1
+            },
+            'coolant': {
+                name: 'Coolant Temperature',
+                icon: 'fas fa-thermometer-half',
+                field: 'coolant',
+                unit: '°C',
+                maxValue: 120,
+                decimal: 1
+            },
+            'afr': {
+                name: 'Air Fuel Ratio',
+                icon: 'fas fa-fire',
+                field: 'afr',
+                unit: 'AFR',
+                maxValue: 20,
+                decimal: 1
+            },
+            'map': {
+                name: 'Manifold Absolute Pressure',
+                icon: 'fas fa-compress-arrows-alt',
+                field: 'map',
+                unit: 'kPa',
+                maxValue: 250,
+                decimal: 1
+            },
+            'tps': {
+                name: 'Throttle Position Sensor',
+                icon: 'fas fa-sliders-h',
+                field: 'tps',
+                unit: '%',
+                maxValue: 100,
+                decimal: 1
+            },
+            'volt': {
+                name: 'Voltage',
+                icon: 'fas fa-bolt',
+                field: 'volt',
+                unit: 'V',
+                maxValue: 250,
+                decimal: 1
+            },
+            'amp': {
+                name: 'Current',
+                icon: 'fas fa-bolt',
+                field: 'amp',
+                unit: 'A',
+                maxValue: 100,
+                decimal: 1
+            },
+            'oil': {
+                name: 'Oil Pressure',
+                icon: 'fas fa-oil-can',
+                field: 'oil',
+                unit: 'PSI',
+                maxValue: 100,
+                decimal: 1
+            },
+            'fuel': {
+                name: 'Fuel Level',
+                icon: 'fas fa-gas-pump',
+                field: 'fuel',
+                unit: '%',
+                maxValue: 100,
+                decimal: 1
+            }
+        };
+
+        // Global variables
+        let sensorData = {};
+        let mainChart = null;
+        let currentSensor = 'rpm';
+        let currentHours = 24;
+        let thresholds = {};
+
+        // Initialize date selectors
+        function initializeDateSelectors() {
+            const years = [];
+            const currentYear = new Date().getFullYear();
+            for (let i = currentYear - 10; i <= currentYear; i++) {
+                years.push(i);
+            }
+            
+            const months = [
+                {value: 1, name: 'Jan'}, {value: 2, name: 'Feb'}, {value: 3, name: 'Mar'},
+                {value: 4, name: 'Apr'}, {value: 5, name: 'May'}, {value: 6, name: 'Jun'},
+                {value: 7, name: 'Jul'}, {value: 8, name: 'Aug'}, {value: 9, name: 'Sep'},
+                {value: 10, name: 'Oct'}, {value: 11, name: 'Nov'}, {value: 12, name: 'Dec'}
+            ];
+            
+            const days = Array.from({length: 31}, (_, i) => i + 1);
+            
+            // Populate year selectors
+            const yearSelectors = document.querySelectorAll('select[id$="year"]');
+            yearSelectors.forEach(select => {
+                years.forEach(year => {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    select.appendChild(option);
+                });
+                select.value = currentYear;
+            });
+            
+            // Populate month selectors
+            const monthSelectors = document.querySelectorAll('select[id$="month"]');
+            monthSelectors.forEach(select => {
+                months.forEach(month => {
+                    const option = document.createElement('option');
+                    option.value = month.value;
+                    option.textContent = month.name;
+                    select.appendChild(option);
+                });
+                select.value = new Date().getMonth() + 1;
+            });
+            
+            // Populate day selectors
+            const daySelectors = document.querySelectorAll('select[id$="day"]');
+            daySelectors.forEach(select => {
+                days.forEach(day => {
+                    const option = document.createElement('option');
+                    option.value = day;
+                    option.textContent = day;
+                    select.appendChild(option);
+                });
+                select.value = new Date().getDate();
+            });
+        }
+
+        // Calculate statistics from data
+        function calculateStatistics(data, field) {
+            if (!data || data.length === 0) {
+                return {
+                    avg: 0,
+                    min: 0,
+                    max: 0,
+                    last: 0,
+                    warnings: 0,
+                    stability: 0
+                };
+            }
+
+            const values = data
+                .filter(d => d[field] !== null && d[field] !== undefined)
+                .map(d => parseFloat(d[field]));
+
+            if (values.length === 0) {
+                return {
+                    avg: 0,
+                    min: 0,
+                    max: 0,
+                    last: 0,
+                    warnings: 0,
+                    stability: 0
+                };
+            }
+
+            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            const last = values[values.length - 1];
+
+            // Calculate standard deviation for stability
+            const variance = values.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / values.length;
+            const stdDev = Math.sqrt(variance);
+            const stability = avg > 0 ? Math.max(0, 100 - (stdDev / avg * 100)) : 100;
+
+            // Count warnings based on thresholds
+            const sensorThreshold = thresholds[field] || {};
+            let warnings = 0;
+            
+            if (sensorThreshold.min || sensorThreshold.max) {
+                values.forEach(value => {
+                    if ((sensorThreshold.min && value < sensorThreshold.min) || 
+                        (sensorThreshold.max && value > sensorThreshold.max)) {
+                        warnings++;
+                    }
+                });
+            }
+
+            return {
+                avg: avg,
+                min: min,
+                max: max,
+                last: last,
+                warnings: warnings,
+                stability: stability
+            };
+        }
+
+        // Calculate overview statistics
+        function calculateOverviewStats(data) {
+            if (!data || data.length === 0) {
+                return {
+                    dailyAverage: 0,
+                    totalHours: 0,
+                    daysActive: 0,
+                    longestSession: 0
+                };
+            }
+
+            // Group data by day
+            const days = {};
+            data.forEach(record => {
+                if (record.timestamp) {
+                    const date = new Date(record.timestamp).toDateString();
+                    if (!days[date]) {
+                        days[date] = [];
+                    }
+                    days[date].push(record);
+                }
+            });
+
+            // Calculate days with engine running (rpm > 0)
+            const activeDays = Object.keys(days).filter(date => {
+                return days[date].some(record => record.rpm > 0);
+            });
+
+            // Calculate total hours of operation
+            // Assuming each record represents 5 seconds of data (based on MQTT interval)
+            const totalRecordsWithRPM = data.filter(record => record.rpm > 0).length;
+            const totalHours = (totalRecordsWithRPM * 5) / 3600; // Convert seconds to hours
+
+            // Calculate daily average
+            const dailyAverage = activeDays.length > 0 ? totalHours / activeDays.length : 0;
+
+            // Calculate longest continuous session (simplified)
+            let currentSession = 0;
+            let longestSession = 0;
+            
+            data.forEach(record => {
+                if (record.rpm > 0) {
+                    currentSession += 5; // 5 seconds per record
+                } else {
+                    longestSession = Math.max(longestSession, currentSession);
+                    currentSession = 0;
+                }
+            });
+            
+            longestSession = Math.max(longestSession, currentSession) / 3600; // Convert to hours
+
+            return {
+                dailyAverage: dailyAverage,
+                totalHours: totalHours,
+                daysActive: activeDays.length,
+                longestSession: longestSession
+            };
+        }
+
+        // Fetch thresholds from server
+        async function fetchThresholds() {
+            try {
+                const response = await fetch(`${API_URL}/thresholds`);
+                const data = await response.json();
+                if (data.success) {
+                    thresholds = data.data;
+                }
+            } catch (error) {
+                console.error('Error fetching thresholds:', error);
+            }
+        }
+
+        // Fetch historical data
+        async function fetchHistoricalData(hours = 24) {
+            try {
+                const response = await fetch(`${API_URL}/engine-data/history?hours=${hours}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    return data.data;
+                } else {
+                    console.error('Error fetching historical data:', data.error);
+                    return [];
+                }
+            } catch (error) {
+                console.error('Error fetching historical data:', error);
+                return [];
+            }
+        }
+
+        // Fetch overview data (7 days for overview cards)
+        async function fetchOverviewData() {
+            const data = await fetchHistoricalData(168); // 7 days
+            return calculateOverviewStats(data);
+        }
+
+        // Update sensor cards
+        async function updateSensorCards(hours = 24) {
+            const data = await fetchHistoricalData(hours);
+            const sensorsContainer = document.getElementById('sensorsContainer');
+            sensorsContainer.innerHTML = '';
+
+            // Get threshold data
+            await fetchThresholds();
+
+            // Calculate statistics for each sensor
+            const sensorStats = {};
+            for (const [sensorId, config] of Object.entries(sensorConfig)) {
+                sensorStats[sensorId] = calculateStatistics(data, config.field);
+            }
+
+            // Create sensor cards
+            for (const [sensorId, config] of Object.entries(sensorConfig)) {
+                const stats = sensorStats[sensorId];
+                const decimalPlaces = config.decimal || 0;
+                
+                // Determine status based on warnings
+                let status = 'status-normal';
+                let statusText = 'Normal';
+                
+                if (stats.warnings > 0) {
+                    const warningPercentage = (stats.warnings / data.length) * 100;
+                    if (warningPercentage > 10) {
+                        status = 'status-critical';
+                        statusText = 'Critical';
+                    } else {
+                        status = 'status-warning';
+                        statusText = 'Warning';
+                    }
+                }
+
+                // Create sensor card HTML
+                const sensorCard = document.createElement('div');
+                sensorCard.className = 'sensor-card';
+                sensorCard.setAttribute('data-sensor', sensorId);
+                
+                sensorCard.innerHTML = `
+                    <div class="sensor-header">
+                        <div class="sensor-name">
+                            <div class="sensor-icon">
+                                <i class="${config.icon}"></i>
+                            </div>
+                            ${config.name}
+                        </div>
+                        <div class="sensor-status ${status}">${statusText}</div>
+                    </div>
+                    <div class="sensor-stats">
+                        <div class="stat-item">
+                            <div class="stat-label">Average</div>
+                            <div class="stat-value">${stats.avg.toFixed(decimalPlaces)} ${config.unit}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Min/Max</div>
+                            <div class="stat-value">${stats.min.toFixed(decimalPlaces)} / ${stats.max.toFixed(decimalPlaces)} ${config.unit}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Stability</div>
+                            <div class="stat-value">${stats.stability.toFixed(1)}%</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Last Value</div>
+                            <div class="stat-value">${stats.last.toFixed(decimalPlaces)} ${config.unit}</div>
+                        </div>
+                    </div>
+                    <div class="sensor-footer">
+                        <div class="warning-indicator">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span class="${stats.warnings > 0 ? 'warning-nonzero' : 'warning-zero'}">
+                                Warnings: ${stats.warnings}
+                            </span>
+                        </div>
+                        <div class="last-updated">${hours === 24 ? 'Last 24h' : `Last ${hours/24} days`}</div>
+                    </div>
+                `;
+
+                // Add click event for chart
+                sensorCard.addEventListener('click', () => {
+                    currentSensor = sensorId;
+                    showChartForSensor(sensorId, hours);
+                });
+
+                sensorsContainer.appendChild(sensorCard);
+            }
+
+            // Show sensors container and hide loading
+            document.getElementById('sensorsLoading').style.display = 'none';
+            sensorsContainer.style.display = 'grid';
+        }
+
+        // Update overview cards
+        async function updateOverviewCards() {
+            const stats = await fetchOverviewData();
+            
+            document.getElementById('dailyAverage').textContent = `${stats.dailyAverage.toFixed(1)} hrs`;
+            document.getElementById('totalHours').textContent = `${stats.totalHours.toFixed(1)} hrs`;
+            document.getElementById('daysActive').textContent = `${stats.daysActive} days`;
+            document.getElementById('longestSession').textContent = `${stats.longestSession.toFixed(1)} hrs`;
+        }
+
+        // Show chart for sensor
+        async function showChartForSensor(sensorId, hours = 24) {
+            const data = await fetchHistoricalData(hours);
+            const config = sensorConfig[sensorId];
+            
+            if (!data || data.length === 0) {
+                alert('No data available for chart');
+                return;
+            }
+
+            // Prepare chart data
+            const chartData = data
+                .filter(d => d[config.field] !== null && d[config.field] !== undefined)
+                .slice(-100); // Limit to last 100 points for performance
+
+            const labels = chartData.map(d => {
+                const date = new Date(d.timestamp);
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            });
+
+            const values = chartData.map(d => parseFloat(d[config.field]));
+
+            // Create or update chart
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            
+            if (mainChart) {
+                mainChart.destroy();
+            }
+
+            mainChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `${config.name} (${config.unit})`,
+                        data: values,
+                        borderColor: '#1745a5',
+                        backgroundColor: 'rgba(23, 69, 165, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#1745a5',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.y.toFixed(config.decimal || 0)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: config.field !== 'iat' && config.field !== 'coolant',
+                            title: {
+                                display: true,
+                                text: config.unit
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Update chart title
+            document.getElementById('chartTitle').textContent = `${config.name} Trend`;
+            
+            // Show chart container
+            document.getElementById('chartContainer').style.display = 'block';
+            
+            // Scroll to chart
+            document.getElementById('chartContainer').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Time filter functionality
+        function setupTimeFilters() {
+            document.querySelectorAll('.time-btn').forEach(button => {
+                button.addEventListener('click', async function() {
+                    document.querySelectorAll('.time-btn').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    this.classList.add('active');
+                    
+                    currentHours = parseInt(this.getAttribute('data-hours'));
+                    
+                    // Show loading
+                    document.getElementById('sensorsLoading').style.display = 'block';
+                    document.getElementById('sensorsContainer').style.display = 'none';
+                    
+                    // Update sensor cards with new time range
+                    await updateSensorCards(currentHours);
+                });
+            });
+        }
+
+        // Date range functionality
+        function setupDateRange() {
+            document.getElementById('applyDateRange').addEventListener('click', async function() {
+                const startYear = document.getElementById('start-year').value;
+                const startMonth = document.getElementById('start-month').value;
+                const startDay = document.getElementById('start-day').value;
+                const endYear = document.getElementById('end-year').value;
+                const endMonth = document.getElementById('end-month').value;
+                const endDay = document.getElementById('end-day').value;
+                
+                if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) {
+                    alert('Please select complete start and end dates');
+                    return;
+                }
+                
+                const startDate = `${startYear}-${startMonth.padStart(2, '0')}-${startDay.padStart(2, '0')}`;
+                const endDate = `${endYear}-${endMonth.padStart(2, '0')}-${endDay.padStart(2, '0')}`;
+                
+                try {
+                    // Show loading
+                    document.getElementById('sensorsLoading').style.display = 'block';
+                    document.getElementById('sensorsContainer').style.display = 'none';
+                    
+                    // Fetch data for custom date range
+                    const response = await fetch(`${API_URL}/engine-data/history?startDate=${startDate}&endDate=${endDate}`);
+                    const data = await response.json();
+                    
+                    if (data.success && data.data.length > 0) {
+                        // Update sensor cards with custom date range data
+                        // For simplicity, we'll reuse the updateSensorCards function
+                        // by temporarily setting currentHours to represent the date range
+                        await updateSensorCardsForCustomRange(data.data);
+                    } else {
+                        alert('No data available for selected date range');
+                        // Fall back to 24h data
+                        await updateSensorCards(24);
+                    }
+                } catch (error) {
+                    console.error('Error fetching custom date range data:', error);
+                    alert('Error fetching data for selected date range');
+                }
+            });
+        }
+
+        // Helper function for custom date range
+        async function updateSensorCardsForCustomRange(data) {
+            const sensorsContainer = document.getElementById('sensorsContainer');
+            sensorsContainer.innerHTML = '';
+
+            // Calculate statistics for each sensor
+            const sensorStats = {};
+            for (const [sensorId, config] of Object.entries(sensorConfig)) {
+                sensorStats[sensorId] = calculateStatistics(data, config.field);
+            }
+
+            // Create sensor cards (similar to updateSensorCards but without hours parameter)
+            for (const [sensorId, config] of Object.entries(sensorConfig)) {
+                const stats = sensorStats[sensorId];
+                const decimalPlaces = config.decimal || 0;
+                
+                // Determine status
+                let status = 'status-normal';
+                let statusText = 'Normal';
+                
+                if (stats.warnings > 0) {
+                    const warningPercentage = (stats.warnings / data.length) * 100;
+                    if (warningPercentage > 10) {
+                        status = 'status-critical';
+                        statusText = 'Critical';
+                    } else {
+                        status = 'status-warning';
+                        statusText = 'Warning';
+                    }
+                }
+
+                const sensorCard = document.createElement('div');
+                sensorCard.className = 'sensor-card';
+                sensorCard.setAttribute('data-sensor', sensorId);
+                
+                sensorCard.innerHTML = `
+                    <div class="sensor-header">
+                        <div class="sensor-name">
+                            <div class="sensor-icon">
+                                <i class="${config.icon}"></i>
+                            </div>
+                            ${config.name}
+                        </div>
+                        <div class="sensor-status ${status}">${statusText}</div>
+                    </div>
+                    <div class="sensor-stats">
+                        <div class="stat-item">
+                            <div class="stat-label">Average</div>
+                            <div class="stat-value">${stats.avg.toFixed(decimalPlaces)} ${config.unit}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Min/Max</div>
+                            <div class="stat-value">${stats.min.toFixed(decimalPlaces)} / ${stats.max.toFixed(decimalPlaces)} ${config.unit}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Stability</div>
+                            <div class="stat-value">${stats.stability.toFixed(1)}%</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Last Value</div>
+                            <div class="stat-value">${stats.last.toFixed(decimalPlaces)} ${config.unit}</div>
+                        </div>
+                    </div>
+                    <div class="sensor-footer">
+                        <div class="warning-indicator">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <span class="${stats.warnings > 0 ? 'warning-nonzero' : 'warning-zero'}">
+                                Warnings: ${stats.warnings}
+                            </span>
+                        </div>
+                        <div class="last-updated">Custom Date Range</div>
+                    </div>
+                `;
+
+                sensorCard.addEventListener('click', () => {
+                    currentSensor = sensorId;
+                    // For custom date range, we'll show a simple chart with available data
+                    showCustomRangeChart(sensorId, data);
+                });
+
+                sensorsContainer.appendChild(sensorCard);
+            }
+
+            document.getElementById('sensorsLoading').style.display = 'none';
+            sensorsContainer.style.display = 'grid';
+        }
+
+        // Show chart for custom date range
+        function showCustomRangeChart(sensorId, data) {
+            const config = sensorConfig[sensorId];
+            
+            if (!data || data.length === 0) {
+                alert('No data available for chart');
+                return;
+            }
+
+            // Prepare chart data
+            const chartData = data
+                .filter(d => d[config.field] !== null && d[config.field] !== undefined)
+                .slice(-100); // Limit to last 100 points
+
+            const labels = chartData.map(d => {
+                const date = new Date(d.timestamp);
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            });
+
+            const values = chartData.map(d => parseFloat(d[config.field]));
+
+            // Create or update chart
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            
+            if (mainChart) {
+                mainChart.destroy();
+            }
+
+            mainChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `${config.name} (${config.unit})`,
+                        data: values,
+                        borderColor: '#1745a5',
+                        backgroundColor: 'rgba(23, 69, 165, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#1745a5',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.y.toFixed(config.decimal || 0)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: config.field !== 'iat' && config.field !== 'coolant',
+                            title: {
+                                display: true,
+                                text: config.unit
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date & Time'
+                            }
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('chartTitle').textContent = `${config.name} Trend (Custom Range)`;
+            document.getElementById('chartContainer').style.display = 'block';
+            document.getElementById('chartContainer').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Export functionality
+        function setupExport() {
+            const toggleExportBtn = document.getElementById('toggleExport');
+            const exportOptions = document.getElementById('exportOptions');
+            const exportButtons = document.querySelectorAll('.export-btn');
+            
+            toggleExportBtn.addEventListener('click', function() {
+                exportOptions.style.display = exportOptions.style.display === 'block' ? 'none' : 'block';
+            });
+            
+            exportButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const format = this.getAttribute('data-format');
+                    exportData(format);
+                });
+            });
+            
+            document.getElementById('printChart').addEventListener('click', function() {
+                window.print();
+            });
+        }
+        
+        // Export data
+        function exportData(format) {
+            if (!mainChart) {
+                alert('No chart data to export');
+                return;
+            }
+            
+            const sensorName = document.getElementById('chartTitle').textContent.replace(' Trend', '');
+            const labels = mainChart.data.labels;
+            const data = mainChart.data.datasets[0].data;
+            
+            let content = '';
+            let filename = `${sensorName}_data_${new Date().toISOString().split('T')[0]}`;
+            
+            switch(format) {
+                case 'csv':
+                    content = 'Time,Value\n';
+                    labels.forEach((label, index) => {
+                        content += `${label},${data[index]}\n`;
+                    });
+                    filename += '.csv';
+                    downloadFile(content, filename, 'text/csv');
+                    break;
+                    
+                case 'json':
+                    const jsonData = {
+                        sensor: sensorName,
+                        data: labels.map((label, index) => {
+                            return {
+                                time: label,
+                                value: data[index]
+                            };
+                        })
+                    };
+                    content = JSON.stringify(jsonData, null, 2);
+                    filename += '.json';
+                    downloadFile(content, filename, 'application/json');
+                    break;
+                    
+                case 'png':
+                    const link = document.createElement('a');
+                    link.download = filename + '.png';
+                    link.href = mainChart.toBase64Image();
+                    link.click();
+                    break;
+                    
+                case 'pdf':
+                    alert('PDF export would require additional libraries. For now, please use the print function and save as PDF.');
+                    break;
+            }
+        }
+        
+        // Helper function to download files
+        function downloadFile(content, filename, contentType) {
+            const blob = new Blob([content], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Initialize components
+            initializeDateSelectors();
+            setupTimeFilters();
+            setupDateRange();
+            setupExport();
+            
+            // Load thresholds
+            await fetchThresholds();
+            
+            // Load initial data
+            await Promise.all([
+                updateOverviewCards(),
+                updateSensorCards(24)
+            ]);
+            
+            // Add subtle animation to cards
+            const cards = document.querySelectorAll('.sensor-card, .overview-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+        });
+    </script>
+</body>
+</html>
