@@ -274,201 +274,176 @@
   <div id="notification" class="notification"></div>
 
   <script>
-    // === STATE & CONFIG ===
-    const MAINT_KEY = 'gen_track_maintenance_v1';
+    const API_URL = '/api/maintenance';
     let currentFilter = 'all';
+    let allTasks = [];
 
-    // === DATA MANAGEMENT ===
-    function loadTasks() {
-      const data = localStorage.getItem(MAINT_KEY);
-      if(!data) {
-        // Init Sample Data
-        const samples = [
-          { id: '1', name: 'Oil Change', type: 'preventive', priority: 'high', dueDate: '2025-12-01', status: 'overdue', assignedTo: 'Operator', createdAt: Date.now() },
-          { id: '2', name: 'Filter Inspect', type: 'inspection', priority: 'medium', dueDate: '2025-12-15', status: 'scheduled', assignedTo: 'Technician A', createdAt: Date.now() },
-          { id: '3', name: 'Spark Plugs', type: 'corrective', priority: 'low', dueDate: '2025-11-20', status: 'completed', assignedTo: 'Operator', createdAt: Date.now(), completedAt: Date.now() }
-        ];
-        saveTasks(samples);
-        return samples;
-      }
-      return JSON.parse(data);
+    // --- LOAD DATA DARI SERVER ---
+    async function fetchTasks() {
+        try {
+            const res = await fetch(API_URL);
+            const json = await res.json();
+            if (json.success) {
+                allTasks = json.data;
+                render();
+            }
+        } catch (e) { console.error(e); }
     }
 
-    function saveTasks(tasks) {
-      localStorage.setItem(MAINT_KEY, JSON.stringify(tasks));
-    }
-
-    // === RENDER UI ===
+    // --- RENDER UI ---
     function render() {
-      const tasks = loadTasks();
-      const tbody = document.getElementById('maintenanceTableBody');
-      const histBody = document.getElementById('historyTableBody');
-      const timeline = document.getElementById('maintenanceTimeline');
-      const now = new Date();
+        const tbody = document.getElementById('maintenanceTableBody');
+        const histBody = document.getElementById('historyTableBody');
+        const timeline = document.getElementById('maintenanceTimeline');
+        const now = new Date();
 
-      // 1. Counters
-      const overdue = tasks.filter(t => t.status !== 'completed' && new Date(t.dueDate) < now).length;
-      const completed = tasks.filter(t => t.status === 'completed').length;
-      const scheduled = tasks.filter(t => t.status === 'scheduled' || t.status === 'in-progress').length;
-      const upcoming = tasks.filter(t => {
-        const d = new Date(t.dueDate);
-        return t.status !== 'completed' && d > now && (d - now) < (7 * 86400000);
-      }).length;
+        // 1. Update Counters
+        const overdue = allTasks.filter(t => t.status !== 'completed' && new Date(t.dueDate) < now).length;
+        const completed = allTasks.filter(t => t.status === 'completed').length;
+        const scheduled = allTasks.filter(t => t.status === 'scheduled').length;
+        // Upcoming 7 hari ke depan
+        const upcoming = allTasks.filter(t => {
+            const d = new Date(t.dueDate);
+            return t.status !== 'completed' && d > now && (d - now) < (7 * 86400000);
+        }).length;
 
-      document.getElementById('overdueCount').innerText = overdue;
-      document.getElementById('completedCount').innerText = completed;
-      document.getElementById('scheduledCount').innerText = scheduled;
-      document.getElementById('upcomingCount').innerText = upcoming;
+        document.getElementById('overdueCount').innerText = overdue;
+        document.getElementById('completedCount').innerText = completed;
+        document.getElementById('scheduledCount').innerText = scheduled;
+        document.getElementById('upcomingCount').innerText = upcoming;
 
-      // 2. Main Table
-      tbody.innerHTML = '';
-      let filtered = tasks;
-      
-      if (currentFilter !== 'all') {
-        if(currentFilter === 'overdue') filtered = tasks.filter(t => t.status !== 'completed' && new Date(t.dueDate) < now);
-        else filtered = tasks.filter(t => t.status === currentFilter);
-      } else {
-        // Default View: Hide completed from main list
-        filtered = tasks.filter(t => t.status !== 'completed');
-      }
+        // 2. Render Table Utama
+        tbody.innerHTML = '';
+        let filtered = allTasks;
 
-      filtered.forEach(t => {
-        // Auto-check overdue visual
-        let displayStatus = t.status;
-        if(t.status === 'scheduled' && new Date(t.dueDate) < now) displayStatus = 'overdue';
+        if (currentFilter !== 'all') {
+            if(currentFilter === 'overdue') filtered = allTasks.filter(t => t.status !== 'completed' && new Date(t.dueDate) < now);
+            else filtered = allTasks.filter(t => t.status === currentFilter);
+        } else {
+            // Default: Sembunyikan yang sudah selesai agar tabel bersih
+            filtered = allTasks.filter(t => t.status !== 'completed');
+        }
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><b>${t.name}</b></td>
-          <td style="text-transform:capitalize">${t.type}</td>
-          <td class="priority-${t.priority}" style="text-transform:capitalize">${t.priority}</td>
-          <td>${new Date(t.dueDate).toLocaleDateString()}</td>
-          <td><span class="status-badge status-${displayStatus}">${displayStatus}</span></td>
-          <td>${t.assignedTo}</td>
-          <td>
-            <div class="action-buttons">
-              <button class="btn btn-secondary" onclick="completeTask('${t.id}')" title="Complete"><i class="fas fa-check"></i></button>
-              <button class="btn btn-danger" onclick="deleteTask('${t.id}')" title="Delete"><i class="fas fa-trash"></i></button>
-            </div>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
+        filtered.forEach(t => {
+            let displayStatus = t.status;
+            // Cek visual overdue
+            if(t.status === 'scheduled' && new Date(t.dueDate) < now) displayStatus = 'overdue';
 
-      // 3. History Table (Completed Tasks)
-      histBody.innerHTML = '';
-      const historyTasks = tasks.filter(t => t.status === 'completed').slice(0, 10);
-      historyTasks.forEach(t => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${t.name}</td>
-          <td>${t.type}</td>
-          <td>${t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '-'}</td>
-          <td>${t.assignedTo}</td>
-          <td><span class="status-badge status-completed">Completed</span></td>
-        `;
-        histBody.appendChild(tr);
-      });
+            const row = `
+            <tr>
+                <td><b>${t.task}</b></td>
+                <td style="text-transform:capitalize">${t.type}</td>
+                <td class="priority-${t.priority}" style="text-transform:capitalize">${t.priority}</td>
+                <td>${new Date(t.dueDate).toLocaleDateString()}</td>
+                <td><span class="status-badge status-${displayStatus}">${displayStatus}</span></td>
+                <td>${t.assignedTo}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="btn btn-secondary" onclick="completeTask('${t._id}')"><i class="fas fa-check"></i></button>
+                        <button class="btn btn-danger" onclick="deleteTask('${t._id}')"><i class="fas fa-trash"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
 
-      // 4. Timeline (Last 5 activities)
-      timeline.innerHTML = '';
-      tasks.slice(0, 5).forEach(t => {
-        const div = document.createElement('div');
-        div.className = `timeline-item ${t.status === 'completed' ? 'completed' : (new Date(t.dueDate) < now ? 'overdue' : '')}`;
-        div.innerHTML = `
-          <div class="timeline-date">${new Date(t.createdAt).toLocaleDateString()}</div>
-          <div class="timeline-content">
-            <strong>${t.name}</strong> <small>(${t.status})</small><br>
-            <span style="font-size:12px;color:grey">Assigned to: ${t.assignedTo}</span>
-          </div>
-        `;
-        timeline.appendChild(div);
-      });
+        // 3. History Table (Completed)
+        histBody.innerHTML = '';
+        allTasks.filter(t => t.status === 'completed').slice(0, 10).forEach(t => {
+            histBody.innerHTML += `
+            <tr>
+                <td>${t.task}</td>
+                <td>${t.type}</td>
+                <td>${t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '-'}</td>
+                <td>${t.assignedTo}</td>
+                <td><span class="status-badge status-completed">Completed</span></td>
+            </tr>`;
+        });
+
+        // 4. Timeline (Activity Log) - Diurutkan dari yang terbaru dibuat
+        timeline.innerHTML = '';
+        // Sort by createdAt descending
+        const recentTasks = [...allTasks].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
+        
+        recentTasks.forEach(t => {
+            const isOverdue = t.status !== 'completed' && new Date(t.dueDate) < now;
+            const itemClass = t.status === 'completed' ? 'completed' : (isOverdue ? 'overdue' : '');
+            
+            timeline.innerHTML += `
+            <div class="timeline-item ${itemClass}">
+                <div class="timeline-date">${new Date(t.createdAt).toLocaleDateString()}</div>
+                <div class="timeline-content">
+                    <strong>${t.task}</strong> <small>(${t.status})</small><br>
+                    <span style="font-size:12px;color:grey">Assigned to: ${t.assignedTo}</span>
+                </div>
+            </div>`;
+        });
     }
 
-    // === ACTIONS ===
+    // === ACTIONS (CRUD KE SERVER) ===
+
+    async function saveMaintenance() {
+        const payload = {
+            task: document.getElementById('taskName').value,
+            type: document.getElementById('taskType').value,
+            priority: document.getElementById('priority').value,
+            dueDate: document.getElementById('dueDate').value,
+            assignedTo: document.getElementById('assignedTo').value,
+            status: 'scheduled'
+        };
+
+        if(!payload.task || !payload.dueDate) return alert('Please fill required fields');
+
+        await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        closeAddModal();
+        fetchTasks(); // Refresh data
+        showNotif('Task scheduled', 'success');
+    }
+
+    async function completeTask(id) {
+        if(!confirm("Mark this task as completed?")) return;
+        await fetch(`${API_URL}/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'completed', completedAt: new Date() })
+        });
+        fetchTasks();
+        showNotif('Task completed', 'success');
+    }
+
+    async function deleteTask(id) {
+        if(!confirm("Delete task permanently?")) return;
+        await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+        fetchTasks();
+        showNotif('Task deleted', 'success');
+    }
+
     function setFilter(filter, btn) {
-      currentFilter = filter;
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      if(btn) btn.classList.add('active');
-      render();
-    }
-
-    function saveMaintenance() {
-      const name = document.getElementById('taskName').value;
-      const type = document.getElementById('taskType').value;
-      const prio = document.getElementById('priority').value;
-      const due = document.getElementById('dueDate').value;
-      const assign = document.getElementById('assignedTo').value;
-
-      if(!name || !due) return showNotif('Please fill required fields', 'error');
-
-      const tasks = loadTasks();
-      tasks.unshift({
-        id: Date.now().toString(),
-        name, type, priority: prio, dueDate: due, assignedTo: assign,
-        status: 'scheduled', createdAt: Date.now()
-      });
-
-      saveTasks(tasks);
-      closeAddModal();
-      render();
-      showNotif('Task scheduled successfully', 'success');
-    }
-
-    function completeTask(id) {
-      const tasks = loadTasks();
-      const idx = tasks.findIndex(t => t.id === id);
-      if(idx !== -1) {
-        tasks[idx].status = 'completed';
-        tasks[idx].completedAt = Date.now();
-        saveTasks(tasks);
+        currentFilter = filter;
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        if(btn) btn.classList.add('active');
         render();
-        showNotif('Task marked as completed', 'success');
-      }
     }
-
-    function deleteTask(id) {
-      if(!confirm("Delete this task permanently?")) return;
-      const tasks = loadTasks().filter(t => t.id !== id);
-      saveTasks(tasks);
-      render();
-      showNotif('Task deleted', 'success');
-    }
-
-    function exportCSV() {
-      const tasks = loadTasks();
-      let csv = "Task,Type,Priority,DueDate,Status,Technician\n";
-      tasks.forEach(t => {
-        csv += `"${t.name}",${t.type},${t.priority},${t.dueDate},${t.status},"${t.assignedTo}"\n`;
-      });
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'maintenance_schedule.csv';
-      a.click();
-    }
-
-    // === UI UTILS ===
-    function showNotif(msg, type) {
-      const el = document.getElementById('notification');
-      el.innerText = msg;
-      el.className = `notification show notif-${type}`;
-      setTimeout(() => el.className = 'notification', 3000);
-    }
-
+    
     function openAddModal() { document.getElementById('addMaintenanceModal').style.display = 'flex'; }
     function closeAddModal() { document.getElementById('addMaintenanceModal').style.display = 'none'; }
+    function showNotif(msg, type) {
+        const el = document.getElementById('notification');
+        el.innerText = msg;
+        el.className = `notification show notif-${type}`;
+        setTimeout(()=> el.className = 'notification', 3000);
+    }
 
-    // === INIT ===
+    // Init
     document.addEventListener('DOMContentLoaded', () => {
-      // Sidebar Loader
-      fetch('sidebar.html').then(r=>r.text()).then(h=>document.getElementById('sidebar-container').innerHTML=h);
-      // User Info
-      document.getElementById('userarea').querySelector('span').innerText = localStorage.getItem('userRole') || 'Operator';
-      // Initial Render
-      render();
+        fetch('sidebar.html').then(r=>r.text()).then(h=>document.getElementById('sidebar-container').innerHTML=h);
+        fetchTasks();
     });
-  </script>
+</script>
 </body>
 </html>

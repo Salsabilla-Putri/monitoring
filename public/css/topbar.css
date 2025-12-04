@@ -1,0 +1,45 @@
+/* === TOPBAR STYLES (FIXED) === */
+.topbar {
+    position: fixed;
+    top: 0;
+    left: 80px;
+    right: 0;
+    height: 60px;
+    background: #fff; /* Fallback */
+    background: var(--card-bg, #fff);
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 20;
+    transition: left 0.3s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+/* Efek saat Sidebar di-hover */
+#sidebar-container:hover ~ .topbar {
+    left: 220px;
+}
+
+.topbar-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1745a5;
+    color: var(--primary, #1745a5);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-info {
+    background: var(--primary, #1745a5);
+    color: white;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}

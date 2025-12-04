@@ -85,7 +85,7 @@ async function loadThresholdsFromDB() {
 }
 
 // --- MQTT LOGIC ---
-const mqttClient = mqtt.connect(process.env.MQTT_BROKER || 'mqtt://10.28.88.227:1883', {
+const mqttClient = mqtt.connect(process.env.MQTT_BROKER || 'mqtt://10.136.18.227:1883', {
     username: process.env.MQTT_USERNAME || '/TA20:TA20',
     password: process.env.MQTT_PASSWORD || 'TA242501020'
 });
@@ -102,41 +102,86 @@ mqttClient.on('connect', () => {
 });
 
 // LOGIC ALARM DINAMIS (Menggunakan ACTIVE_THRESHOLDS)
+// --- LOGIC ALARM DINAMIS (UPDATED) ---
+// --- LOGIC ALARM DINAMIS (DIPERBAIKI) ---
 async function checkAndSaveAlerts(data) {
     const alertsToSave = [];
-    const T = ACTIVE_THRESHOLDS; // Gunakan variabel dinamis
+    const T = ACTIVE_THRESHOLDS; 
 
-    // Helper check
+    // Helper check function
     const check = (param, val) => {
-        if (!T[param]) return;
-        if (T[param].max && val > T[param].max) {
-            alertsToSave.push({ parameter: param, value: val, message: `${param.toUpperCase()} Too High (> ${T[param].max})`, severity: 'critical' });
+        if (!T[param]) return; // Skip jika tidak ada threshold
+        
+        // Cek Batas Atas
+        if (T[param].max !== undefined && val > T[param].max) {
+            alertsToSave.push({ 
+                parameter: param, 
+                value: val, 
+                message: `${param.toUpperCase()} Too High (> ${T[param].max})`, 
+                severity: 'critical' 
+            });
         }
-        if (T[param].min && val < T[param].min) {
-            alertsToSave.push({ parameter: param, value: val, message: `${param.toUpperCase()} Too Low (< ${T[param].min})`, severity: 'medium' });
+        // Cek Batas Bawah
+        if (T[param].min !== undefined && val < T[param].min) {
+            alertsToSave.push({ 
+                parameter: param, 
+                value: val, 
+                message: `${param.toUpperCase()} Too Low (< ${T[param].min})`, 
+                severity: 'medium' 
+            });
         }
     };
 
-    // Check semua parameter
+    // --- TAMBAHKAN SEMUA PARAMETER DI SINI ---
     check('rpm', data.rpm);
-    check('coolant', data.coolant); // atau data.temp
     check('volt', data.volt);
+    check('amp', data.amp);     // <-- DITAMBAHKAN
+    check('freq', data.freq);   // <-- DITAMBAHKAN
+    check('power', data.power); // <-- DITAMBAHKAN
+    check('coolant', data.coolant); 
+    check('temp', data.temp);
     check('fuel', data.fuel);
     check('oil', data.oil);
-    // Tambahkan parameter lain jika perlu
+    check('iat', data.iat);
+    check('map', data.map);
+    check('afr', data.afr);
+    check('tps', data.tps);
 
+    // Simpan Alert ke Database
     if (alertsToSave.length > 0) {
+        // Cek alert terakhir untuk menghindari spam (optional, debounce 10 detik)
         const lastAlert = await Alert.findOne().sort({ timestamp: -1 });
-        const timeDiff = lastAlert ? (new Date() - lastAlert.timestamp) : 9999999;
+        const timeDiff = lastAlert ? (new Date() - lastAlert.timestamp) : 999999;
         
-        if (timeDiff > 60000) { 
+        if (timeDiff > 10000) { 
             for (const a of alertsToSave) {
                 await new Alert({ ...a, deviceId: data.deviceId }).save();
-                console.log(`⚠️ Alert: ${a.message}`);
+                console.log(`⚠️ Alert Saved: ${a.message}`);
             }
         }
     }
 }
+// --- TAMBAHAN API UNTUK HALAMAN ALARM ---
+
+// 1. Acknowledge (Konfirmasi) Alarm - Mengubah Status jadi "Resolved"
+app.put('/api/alerts/:id/ack', async (req, res) => {
+    try {
+        await Alert.findByIdAndUpdate(req.params.id, { resolved: true });
+        res.json({ success: true, message: 'Alert Acknowledged' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 2. Hapus Alarm dari Database
+app.delete('/api/alerts/:id', async (req, res) => {
+    try {
+        await Alert.findByIdAndDelete(req.params.id);
+        res.json({ success: true, message: 'Alert Deleted' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 mqttClient.on('message', async (topic, message) => {
     try {
@@ -263,6 +308,161 @@ app.post('/api/thresholds', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+// --- TAMBAHAN API UNTUK ALARM (ACKNOWLEDGE & REMOVE) ---
+
+// 1. API untuk tombol ACKNOWLEDGE (Ubah status jadi resolved)
+app.put('/api/alerts/:id/ack', async (req, res) => {
+    try {
+        // Cari alarm berdasarkan ID dan ubah 'resolved' jadi true
+        const updatedAlert = await Alert.findByIdAndUpdate(
+            req.params.id, 
+            { resolved: true },
+            { new: true } // Opsi ini agar data yang dikembalikan adalah yang terbaru
+        );
+        
+        if (!updatedAlert) {
+            return res.status(404).json({ success: false, message: "Alarm not found" });
+        }
+
+        console.log(`✅ Alarm Acknowledged: ${req.params.id}`);
+        res.json({ success: true, data: updatedAlert });
+    } catch (error) {
+        console.error("Ack Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 2. API untuk tombol REMOVE (Hapus permanen dari database)
+app.delete('/api/alerts/:id', async (req, res) => {
+    try {
+        await Alert.findByIdAndDelete(req.params.id);
+        console.log(`🗑️ Alarm Deleted: ${req.params.id}`);
+        res.json({ success: true, message: 'Alarm deleted successfully' });
+    } catch (error) {
+        console.error("Delete Error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// --- 1. UPDATE SCHEMA MAINTENANCE ---
+// ==========================================
+//  TAMBAHAN: MAINTENANCE API (LOGIC BARU)
+// ==========================================
+
+// 1. Buat Schema untuk Database Maintenance
+const maintenanceSchema = new mongoose.Schema({
+    task: { type: String, required: true },       // Nama Tugas
+    type: String,                                 // Tipe: Preventive/Corrective
+    priority: String,                             // Priority: High/Med/Low
+    status: { type: String, default: 'scheduled' }, // scheduled, completed, etc.
+    dueDate: Date,
+    assignedTo: String,
+    createdAt: { type: Date, default: Date.now }, // Tanggal dibuat
+    completedAt: Date                             // Tanggal selesai
+});
+const Maintenance = mongoose.model('Maintenance', maintenanceSchema);
+
+// 2. API: Ambil Data Maintenance (Untuk Dashboard & Halaman Maintenance)
+app.get('/api/maintenance', async (req, res) => {
+    try {
+        // Ambil semua data, urutkan dari yang paling baru dibuat
+        const logs = await Maintenance.find().sort({ createdAt: -1 });
+        res.json({ success: true, data: logs });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 3. API: Simpan Data Baru (Dari tombol "Save" di Halaman Maintenance)
+app.post('/api/maintenance', async (req, res) => {
+    try {
+        const newTask = new Maintenance(req.body);
+        await newTask.save();
+        console.log('🔧 New Maintenance Task:', newTask.task);
+        res.json({ success: true, data: newTask });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 4. API: Update Status (Contoh: Klik tombol Complete/Checklist)
+app.put('/api/maintenance/:id', async (req, res) => {
+    try {
+        const updated = await Maintenance.findByIdAndUpdate(
+            req.params.id, 
+            req.body, 
+            { new: true }
+        );
+        res.json({ success: true, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// 5. API: Hapus Data (Tombol Delete)
+app.delete('/api/maintenance/:id', async (req, res) => {
+    try {
+        await Maintenance.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// const maintenanceSchema = new mongoose.Schema({
+//     task: { type: String, required: true },
+//     type: String,
+//     priority: String,
+//     status: { type: String, default: 'scheduled' },
+//     dueDate: Date,
+//     assignedTo: String,
+//     createdAt: { type: Date, default: Date.now },
+//     completedAt: Date
+// });
+// const Maintenance = mongoose.model('Maintenance', maintenanceSchema);
+
+// // --- 2. UPDATE API ENDPOINTS ---
+
+// // GET: Ambil semua data (Bisa filter lewat query)
+// app.get('/api/maintenance', async (req, res) => {
+//     try {
+//         const logs = await Maintenance.find().sort({ dueDate: 1 }); // Urutkan berdasarkan tenggat waktu
+//         res.json({ success: true, data: logs });
+//     } catch (error) {
+//         res.status(500).json({ success: false, error: error.message });
+//     }
+// });
+
+// // POST: Tambah data baru dari halaman Maintenance
+// app.post('/api/maintenance', async (req, res) => {
+//     try {
+//         const newTask = new Maintenance(req.body);
+//         await newTask.save();
+//         res.json({ success: true, data: newTask });
+//     } catch (error) {
+//         res.status(500).json({ success: false, error: error.message });
+//     }
+// });
+
+// // PUT: Update status (misal: Complete task)
+// app.put('/api/maintenance/:id', async (req, res) => {
+//     try {
+//         const updated = await Maintenance.findByIdAndUpdate(req.params.id, req.body, { new: true });
+//         res.json({ success: true, data: updated });
+//     } catch (error) {
+//         res.status(500).json({ success: false, error: error.message });
+//     }
+// });
+
+// // DELETE: Hapus task
+// app.delete('/api/maintenance/:id', async (req, res) => {
+//     try {
+//         await Maintenance.findByIdAndDelete(req.params.id);
+//         res.json({ success: true });
+//     } catch (error) {
+//         res.status(500).json({ success: false, error: error.message });
+//     }
+// });
 
 app.get('/api/health', (req, res) => res.json({ status: 'healthy', mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' }));
 app.get('/favicon.ico', (req, res) => res.status(204).end());

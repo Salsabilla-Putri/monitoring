@@ -2,235 +2,349 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Gen-Track — Alarms</title>
+  <title>Gen-Track — Alarm Management</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;">
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="sidebar.css">
   
   <style>
+    /* === CSS VARIABLES & GLOBAL === */
     :root {
-      --primary: #1745a5;
-      --primary-light: #3b6bdf;
-      --secondary: #10b981;
-      --secondary-dark: #047857;
-      --warning: #f97316;
-      --danger: #ef4444;
-      --muted: #6b7280;
-      --light: #f8fafc;
-      --dark: #0f172a;
+      --primary: #1745a5; 
+      --bg: #f1f5f9; 
       --card-bg: #fff;
-      --accent: #1745a5;
+      --text: #334155;
+      --border: #e2e8f0;
+      --critical: #dc2626;
+      --warning: #f59e0b;
+      --active: #ef4444;
+      --acknowledged: #10b981;
+    }
+    
+    body { 
+      margin:0; 
+      font-family: 'Segoe UI', sans-serif; 
+      background: var(--bg); 
+      color: var(--text); 
+    }
+    
+    .container { 
+      display: flex; 
+      min-height: 100vh; 
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background:#f1f5f9;
-      color:#0f172a;
-      overflow-x:hidden;
+    /* === LAYOUT === */
+    .main-content { 
+      flex: 1; 
+      margin-left: 80px; 
+      padding: 20px 30px; 
+      padding-top: 80px; 
+      transition: margin-left 0.3s; 
+    }
+    
+    .sidebar:hover ~ .main-content { 
+      margin-left: 220px; 
     }
 
-    .container { display: flex; min-height: 100vh; }
-
-    /* TOPBAR */
-    .topbar {
-      position: fixed; top: 0; left: 80px; right: 0; height: 60px;
-      background: white; border-bottom: 1px solid #d0d7e1;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 24px; z-index: 20; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-      transition: left 0.3s ease;
+    /* === TOPBAR === */
+    .topbar { 
+      position: fixed; 
+      top: 0; 
+      left: 80px; 
+      right: 0; 
+      height: 60px; 
+      background: white; 
+      border-bottom: 1px solid var(--border); 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between; 
+      padding: 0 24px; 
+      z-index: 20; 
+      transition: left 0.3s; 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02); 
     }
-    .sidebar:hover ~ .topbar { left: 220px; }
-    .topbar-title { font-size:20px; font-weight:bold; color:#183153; }
-    .topbar-user {
-      background:#183153; color:white; padding:8px 16px; border-radius:20px;
-      font-size:14px; cursor:pointer; display: flex; align-items: center; gap: 8px;
+    
+    .sidebar:hover ~ .topbar { 
+      left: 220px; 
+    }
+    
+    .topbar h2 { 
+      margin: 0; 
+      font-size: 18px; 
+      color: var(--primary); 
+      display:flex; 
+      align-items:center; 
+      gap:10px; 
     }
 
-    /* MAIN CONTENT */
-    .main-content {
-      flex: 1; margin-left: 80px; padding: 20px; padding-top: 80px;
-      transition: margin-left 0.3s ease;
+    /* === ALARM STATS SECTION === */
+    .alarm-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-bottom: 30px;
     }
-    .sidebar:hover ~ .main-content { margin-left: 220px; }
-
-    /* ALARM CARDS */
-    .alarm-summary {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px; margin-bottom: 25px;
+    
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+      border: 1px solid var(--border);
+      text-align: center;
     }
-
-    .summary-card {
-      background: white; border-radius: 12px; padding: 20px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); text-align: center;
-      transition: transform 0.3s, box-shadow 0.3s;
+    
+    .stat-number {
+      font-size: 32px;
+      font-weight: 700;
+      margin: 10px 0;
     }
-    .summary-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12); }
-    .summary-card.critical { border-left: 4px solid var(--danger); }
-    .summary-card.warning { border-left: 4px solid var(--warning); }
-    .summary-card.info { border-left: 4px solid var(--primary); }
-
-    .summary-value { font-size: 28px; font-weight: 700; margin-bottom: 5px; }
-    .summary-label { font-size: 14px; color: var(--muted); }
-    .critical .summary-value { color: var(--danger); }
-    .warning .summary-value { color: var(--warning); }
-    .info .summary-value { color: var(--primary); }
-
-    /* ALARM TABLE */
-    .alarm-card {
-      background: white; border-radius: 12px; padding: 20px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); margin-bottom: 20px;
+    
+    .stat-label {
+      font-size: 14px;
+      color: #64748b;
     }
-    .card-header {
-      display: flex; justify-content: space-between; align-items: center;
+    
+    .stat-critical .stat-number { color: var(--critical); }
+    .stat-warning .stat-number { color: var(--warning); }
+    .stat-active .stat-number { color: var(--active); }
+    .stat-total .stat-number { color: var(--primary); }
+    
+    /* === FILTER TABS === */
+    .filter-tabs {
+      display: flex;
+      gap: 10px;
       margin-bottom: 20px;
+      padding: 0;
+      border-bottom: 1px solid var(--border);
     }
-    .card-title { font-size: 18px; font-weight: 700; color: var(--primary); }
-
-    .filter-controls { display: flex; gap: 10px; margin-bottom: 20px; }
-    .filter-btn {
-      padding: 8px 16px; background: #f1f5f9; border: 1px solid #d0d7e1;
-      border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s;
+    
+    .filter-tab {
+      padding: 12px 24px;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      font-size: 14px;
+      font-weight: 600;
+      color: #64748b;
+      cursor: pointer;
+      transition: all 0.2s;
     }
-    .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-    .filter-btn:hover:not(.active) { background: #e2e8f0; }
-
-    .action-buttons { display: flex; gap: 10px; }
-    .btn {
-      padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer;
-      font-size: 14px; font-weight: 600; transition: all 0.3s; display: flex; align-items: center; gap: 6px;
+    
+    .filter-tab:hover {
+      color: var(--primary);
     }
-    .btn-primary { background: var(--primary); color: white; }
-    .btn-danger { background: var(--danger); color: white; }
-    .btn:hover { opacity: 0.9; transform: translateY(-2px); }
+    
+    .filter-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      background-color: #f0f7ff;
+    }
+    
+    /* === CARD & TABLE === */
+    .card { 
+      background: var(--card-bg); 
+      border-radius: 12px; 
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); 
+      border: 1px solid var(--border); 
+      overflow: hidden; 
+    }
+    
+    .card-header { 
+      padding: 16px 20px; 
+      border-bottom: 1px solid var(--border); 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      background: #fff; 
+    }
+    
+    .card-header h3 { 
+      margin: 0; 
+      font-size: 16px; 
+      color: var(--primary); 
+      font-weight: 700; 
+    }
 
     table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-    th { background: #f7fbff; font-weight: 700; color: var(--primary); font-size: 14px; }
-    tr:hover { background: #f8fafc; }
+    th { 
+      text-align: left; padding: 14px 20px; 
+      background: #f8fafc; color: #64748b; 
+      font-size: 12px; font-weight: 700; 
+      text-transform: uppercase; border-bottom: 1px solid var(--border); 
+    }
+    td { 
+      padding: 14px 20px; border-bottom: 1px solid var(--border); 
+      font-size: 14px; vertical-align: middle; 
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover { background-color: #fcfcfc; }
 
-    .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-    .status-active { background: #fee2e2; color: #b91c1c; }
-    .status-acknowledged { background: #d1fae5; color: #047857; }
+    /* === BADGES & STATUS === */
+    .badge { 
+      padding: 6px 12px; border-radius: 20px; 
+      font-size: 11px; font-weight: 700; 
+      text-transform: uppercase; display: inline-flex;
+      align-items: center; gap: 5px;
+    }
+    
+    .sev-critical { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .sev-warning { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+    .sev-medium { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .sev-low { background: #e0f2fe; color: #075985; border: 1px solid #bae6fd; }
 
-    .severity-critical { color: var(--danger); font-weight: 600; }
-    .severity-warning { color: var(--warning); font-weight: 600; }
-    .severity-info { color: var(--primary); font-weight: 600; }
+    .st-active { 
+      color: var(--active); background: #fee2e2; 
+      padding: 6px 12px; border-radius: 20px; 
+      font-weight: 700; font-size: 11px; 
+      display: inline-flex; align-items: center; gap: 5px; 
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+    
+    .st-acknowledged { 
+      color: #166534; background: #dcfce7; 
+      padding: 6px 12px; border-radius: 20px; 
+      font-weight: 700; font-size: 11px; 
+      display: inline-flex; align-items: center; gap: 5px; 
+    }
 
-    .empty-state { text-align: center; padding: 40px; color: var(--muted); }
-    .empty-state i { font-size: 48px; margin-bottom: 15px; opacity: 0.5; }
+    /* === BUTTONS === */
+    .btn { 
+      border: none; padding: 6px 12px; border-radius: 6px; 
+      font-size: 12px; cursor: pointer; font-weight: 600; 
+      transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; margin-right: 5px; 
+    }
+    .btn-ack { background: #e0f2fe; color: #0284c7; } 
+    .btn-ack:hover { background: #bae6fd; }
+    .btn-del { background: #fee2e2; color: #ef4444; }
+    .btn-del:hover { background: #fecaca; }
+    .btn-refresh { background: white; border: 1px solid #cbd5e1; color: #475569; }
+    .btn-refresh:hover { background: #f8fafc; }
 
-    /* Responsive */
+    /* === TIME COLUMN === */
+    .time-cell { font-weight: 600; color: #475569; white-space: nowrap; }
+    .parameter-cell { font-weight: 600; color: var(--primary); font-family: monospace; text-transform: uppercase; }
+    .value-cell { font-weight: 700; font-family: 'Courier New', monospace; }
+    
+    /* === RESPONSIVE === */
+    @media (max-width: 1200px) {
+      .alarm-stats { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 768px) {
-      .main-content { margin-left: 60px; }
-      .sidebar:hover ~ .main-content { margin-left: 220px; }
-      .topbar { left: 60px; }
-      .sidebar:hover ~ .topbar { left: 220px; }
-      .alarm-summary { grid-template-columns: 1fr; }
-      .card-header { flex-direction: column; align-items: flex-start; gap: 15px; }
-      .action-buttons { width: 100%; justify-content: space-between; }
-      table { display: block; overflow-x: auto; }
+      .alarm-stats { grid-template-columns: 1fr; }
+      .filter-tabs { overflow-x: auto; flex-wrap: nowrap; }
+      .main-content { padding: 20px 15px; padding-top: 80px; }
     }
   </style>
 </head>
 <body>
+
   <div class="container">
     <div id="sidebar-container"></div>
 
     <div class="topbar">
-      <div class="topbar-title">Alarms & Notifications</div>
-      <div id="userarea" class="topbar-user">
-        <i class="fas fa-user"></i>
-        <span>Operator</span>
+      <h2><i class="fas fa-bell" style="color:#ef4444"></i> Alarms & Notifications</h2>
+      <div style="font-size:13px; color:#64748b">
+        <span id="clock">--:--</span> &nbsp;|&nbsp; 
+        <span style="background:var(--primary); color:white; padding:4px 12px; border-radius:20px; font-weight:600;">
+            <i class="fas fa-user-circle"></i> Operator
+        </span>
       </div>
     </div>
 
     <div class="main-content">
-      <div class="alarm-summary">
-        <div class="summary-card critical">
-          <div class="summary-value" id="criticalCount">0</div>
-          <div class="summary-label">Critical Alarms</div>
+      <div class="alarm-stats">
+        <div class="stat-card stat-critical">
+          <div class="stat-number" id="criticalCount">0</div>
+          <div class="stat-label">Critical Alarms</div>
         </div>
-        <div class="summary-card warning">
-          <div class="summary-value" id="warningCount">0</div>
-          <div class="summary-label">Warning Alarms</div>
+        
+        <div class="stat-card stat-warning">
+          <div class="stat-number" id="warningCount">0</div>
+          <div class="stat-label">Warning Alarms</div>
         </div>
-        <div class="summary-card info">
-          <div class="summary-value" id="activeCount">0</div>
-          <div class="summary-label">Active Alarms</div>
+        
+        <div class="stat-card stat-active">
+          <div class="stat-number" id="activeCount">0</div>
+          <div class="stat-label">Active Alarms</div>
         </div>
-        <div class="summary-card info">
-          <div class="summary-value" id="totalCount">0</div>
-          <div class="summary-label">Total Logs</div>
+        
+        <div class="stat-card stat-total">
+          <div class="stat-number" id="totalCount">0</div>
+          <div class="stat-label">Total Alarms</div>
         </div>
       </div>
 
-      <div class="alarm-card">
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="filterAlarms('all')">All Alarms</button>
+        <button class="filter-tab" onclick="filterAlarms('active')">Active Only</button>
+        <button class="filter-tab" onclick="filterAlarms('critical')">Critical</button>
+        <button class="filter-tab" onclick="filterAlarms('warning')">Warning</button>
+      </div>
+
+      <div class="card">
         <div class="card-header">
-          <div class="card-title">Alarm History</div>
-          <div class="action-buttons">
-            <button class="btn btn-primary" onclick="loadAlarms()">
-              <i class="fas fa-sync-alt"></i> Refresh
-            </button>
-          </div>
+          <h3><i class="fas fa-history"></i> Alarm History</h3>
+          <button onclick="fetchAlarms()" class="btn btn-refresh">
+            <i class="fas fa-sync-alt"></i> Refresh Data
+          </button>
         </div>
 
-        <div class="filter-controls">
-          <button class="filter-btn active" onclick="setFilter('all', this)">All Alarms</button>
-          <button class="filter-btn" onclick="setFilter('active', this)">Active Only</button>
-          <button class="filter-btn" onclick="setFilter('critical', this)">Critical</button>
-          <button class="filter-btn" onclick="setFilter('warning', this)">Warning</button>
-        </div>
-
-        <table id="alarmTable">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Parameter</th>
-              <th>Value</th>
-              <th>Message</th>
-              <th>Severity</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="alarmTableBody">
-            <tr><td colspan="6" style="text-align:center;">Loading data...</td></tr>
-          </tbody>
-        </table>
-
-        <div id="emptyState" class="empty-state" style="display: none;">
-          <i class="fas fa-bell-slash"></i>
-          <h3>No Alarms Found</h3>
-          <p>There are currently no alarms matching your filter criteria.</p>
+        <div style="overflow-x:auto;">
+          <table id="alarmTable">
+            <thead>
+              <tr>
+                <th style="width:200px">Time</th>
+                <th>Parameter</th>
+                <th>Value</th>
+                <th>Severity</th>
+                <th>Status</th>
+                <th style="width:160px; text-align:center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="alarmTableBody">
+              <tr><td colspan="6" style="text-align:center; padding:40px; color:#94a3b8;">Loading data...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    /* =========================
-       CONFIG & STATE
-       ========================= */
+    // --- CONFIGURATION ---
     const API_URL = '/api/alerts';
-    let allAlarms = [];
     let currentFilter = 'all';
+    let allAlarms = [];
 
-    /* =========================
-       FETCH DATA FROM BACKEND
-       ========================= */
-    async function loadAlarms() {
+    // --- SETUP FUNCTIONS ---
+    // Load Sidebar
+    fetch('sidebar.html')
+      .then(r => r.text())
+      .then(h => document.getElementById('sidebar-container').innerHTML = h)
+      .catch(() => console.error('Sidebar not found'));
+
+    // Digital Clock
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock').innerText = 
+        now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- ALARM LOGIC & API ---
+    
+    // 1. FETCH DATA DARI DATABASE
+    async function fetchAlarms() {
       try {
-        const response = await fetch(`${API_URL}?limit=50`); // Ambil 50 alert terakhir
-        const json = await response.json();
-        
-        if (json.success && json.data) {
-          allAlarms = json.data;
-          updateSummary();
+        const res = await fetch(`${API_URL}?limit=100`);
+        const json = await res.json();
+        if (json.success) {
+          allAlarms = json.data; // Simpan data asli
+          updateStats();
           renderTable();
         }
       } catch (error) {
@@ -238,121 +352,178 @@
       }
     }
 
-    /* =========================
-       UI RENDERING
-       ========================= */
-    
-    // 1. Update Kartu Ringkasan (Summary Cards)
-    function updateSummary() {
-      // Hitung berdasarkan data yang diterima
-      const critical = allAlarms.filter(a => a.severity === 'high' || a.severity === 'critical').length;
-      const warning = allAlarms.filter(a => a.severity === 'medium' || a.severity === 'warning' || a.severity === 'low').length;
-      // Asumsi: jika belum ada status 'resolved', anggap active
+    // 2. UPDATE KARTU STATISTIK
+    function updateStats() {
+      const critical = allAlarms.filter(a => a.severity === 'critical').length;
+      const warning = allAlarms.filter(a => a.severity === 'medium' || a.severity === 'low').length;
       const active = allAlarms.filter(a => !a.resolved).length;
-      
+      const total = allAlarms.length;
+
       document.getElementById('criticalCount').textContent = critical;
       document.getElementById('warningCount').textContent = warning;
       document.getElementById('activeCount').textContent = active;
-      document.getElementById('totalCount').textContent = allAlarms.length;
+      document.getElementById('totalCount').textContent = total;
     }
 
-    // 2. Render Tabel Alarm
-    function renderTable() {
-      const tbody = document.getElementById('alarmTableBody');
-      const emptyState = document.getElementById('emptyState');
-      const table = document.getElementById('alarmTable');
+    // 3. FILTER LOGIC
+    function filterAlarms(filterType) {
+      // Update UI Tab
+      document.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+      event.target.classList.add('active');
       
-      tbody.innerHTML = '';
-
-      // Filter Logic
-      let filtered = allAlarms;
-      if (currentFilter === 'active') {
-        filtered = allAlarms.filter(a => !a.resolved);
-      } else if (currentFilter === 'critical') {
-        filtered = allAlarms.filter(a => a.severity === 'high' || a.severity === 'critical');
-      } else if (currentFilter === 'warning') {
-        filtered = allAlarms.filter(a => a.severity === 'medium' || a.severity === 'warning' || a.severity === 'low');
-      }
-
-      // Show/Hide Empty State
-      if (filtered.length === 0) {
-        emptyState.style.display = 'block';
-        table.style.display = 'none';
-        return;
-      } else {
-        emptyState.style.display = 'none';
-        table.style.display = 'table';
-      }
-
-      // Populate Rows
-      filtered.forEach(alarm => {
-        const tr = document.createElement('tr');
-        
-        // Format Severity
-        let severityClass = 'severity-info';
-        let severityText = 'Info';
-        
-        if (alarm.severity === 'high' || alarm.severity === 'critical') {
-          severityClass = 'severity-critical';
-          severityText = 'CRITICAL';
-        } else if (alarm.severity === 'medium' || alarm.severity === 'warning') {
-          severityClass = 'severity-warning';
-          severityText = 'WARNING';
-        }
-
-        // Format Status (Active/Resolved)
-        // Jika backend belum kirim status resolved, kita anggap Active
-        const isResolved = alarm.resolved || false;
-        const statusBadge = isResolved 
-          ? '<span class="status-badge status-acknowledged">Resolved</span>'
-          : '<span class="status-badge status-active">ACTIVE</span>';
-
-        tr.innerHTML = `
-          <td style="font-family:monospace; color:#475569;">${new Date(alarm.timestamp).toLocaleString()}</td>
-          <td style="font-weight:600;">${alarm.parameter ? alarm.parameter.toUpperCase() : 'SYSTEM'}</td>
-          <td>${alarm.value !== undefined ? alarm.value : '-'}</td>
-          <td>${alarm.message}</td>
-          <td class="${severityClass}">${severityText}</td>
-          <td>${statusBadge}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    // 3. Set Filter Handler
-    function setFilter(filterType, btnElement) {
       currentFilter = filterType;
-      
-      // Update UI tombol active
-      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-      if(btnElement) btnElement.classList.add('active');
-      
       renderTable();
     }
 
-    /* =========================
-       INITIALIZATION
-       ========================= */
-    document.addEventListener('DOMContentLoaded', function() {
-      // 1. Set User
-      const user = localStorage.getItem('userRole') || 'Operator';
-      document.getElementById('userarea').querySelector('span').textContent = user;
+    function getFilteredAlarms() {
+      switch(currentFilter) {
+        case 'active': return allAlarms.filter(a => !a.resolved);
+        case 'critical': return allAlarms.filter(a => a.severity === 'critical');
+        case 'warning': return allAlarms.filter(a => a.severity !== 'critical');
+        default: return [...allAlarms];
+      }
+    }
 
-      // 2. Load Sidebar
-      fetch('sidebar.html')
-        .then(response => response.text())
-        .then(data => {
-          document.getElementById('sidebar-container').innerHTML = data;
-          const script = document.createElement('script');
-          script.src = 'sidebar.js';
-          document.body.appendChild(script);
-        })
-        .catch(error => console.error('Error loading sidebar:', error));
+    // 4. RENDER TABLE
+    function renderTable() {
+      const tbody = document.getElementById('alarmTableBody');
+      const filteredAlarms = getFilteredAlarms();
+      
+      tbody.innerHTML = '';
 
-      // 3. Initial Load & Polling
-      loadAlarms();
-      setInterval(loadAlarms, 5000); // Auto-refresh setiap 5 detik
+      if (filteredAlarms.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align:center; padding:40px; color:#94a3b8; font-style:italic;">
+              <i class="fas fa-check-circle" style="font-size:24px; margin-bottom:10px; color:#10b981;"></i><br>
+              No alarms found in this category
+            </td>
+          </tr>`;
+        return;
+      }
+
+      filteredAlarms.forEach(alarm => {
+        // Format Time
+        const date = new Date(alarm.timestamp);
+        const dateStr = date.toLocaleDateString('id-ID', { day:'2-digit', month:'short' });
+        const timeStr = date.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+        // Severity Badge Style
+        // Mapping DB severity to CSS class
+        let sevClass = 'sev-low';
+        let sevIcon = 'fa-info-circle';
+        if (alarm.severity === 'critical') { sevClass = 'sev-critical'; sevIcon = 'fa-exclamation-triangle'; }
+        else if (alarm.severity === 'medium') { sevClass = 'sev-warning'; sevIcon = 'fa-bell'; }
+        
+        // Status Logic & Buttons
+        let statusHtml, actionButtons;
+
+        // === LOGIC UTAMA: ACKNOWLEDGE -> REMOVE ===
+        if (alarm.resolved) {
+          // Jika sudah di-ack (Resolved)
+          statusHtml = `<span class="st-acknowledged"><i class="fas fa-check-circle"></i> ACKNOWLEDGED</span>`;
+          // Tampilkan tombol Hapus
+          actionButtons = `
+            <button class="btn btn-del" onclick="removeAlarm('${alarm._id}')">
+              <i class="fas fa-trash"></i> Remove
+            </button>
+          `;
+        } else {
+          // Jika masih aktif (Belum di-ack)
+          statusHtml = `<span class="st-active"><i class="fas fa-exclamation-circle"></i> ACTIVE</span>`;
+          // Tampilkan HANYA tombol Acknowledge
+          actionButtons = `
+            <button class="btn btn-ack" onclick="acknowledgeAlarm('${alarm._id}')">
+              <i class="fas fa-check"></i> Acknowledge
+            </button>
+          `;
+        }
+
+        const row = `
+          <tr>
+            <td class="time-cell">${timeStr} <span style="font-size:11px; color:#94a3b8; margin-left:5px;">${dateStr}</span></td>
+            <td class="parameter-cell">${alarm.parameter || 'SYS'}</td>
+            <td class="value-cell">${alarm.value}</td>
+            <td>
+              <span class="badge ${sevClass}">
+                <i class="fas ${sevIcon}"></i> ${alarm.severity}
+              </span>
+            </td>
+            <td>${statusHtml}</td>
+            <td style="text-align:center;">${actionButtons}</td>
+          </tr>
+        `;
+        tbody.innerHTML += row;
+      });
+    }
+
+    // --- ACTIONS ---
+
+    // Acknowledge: Ubah status di DB jadi resolved=true
+    async function acknowledgeAlarm(id) {
+      try {
+        const res = await fetch(`${API_URL}/${id}/ack`, { method: 'PUT' });
+        const json = await res.json();
+        
+        if (json.success) {
+          showNotification('Alarm acknowledged', 'success');
+          fetchAlarms(); // Refresh otomatis agar tombol berubah jadi Remove
+        }
+      } catch(e) {
+        showNotification('Failed to acknowledge', 'error');
+      }
+    }
+
+    // Remove: Hapus dari DB (Hanya bisa jika sudah resolved)
+    async function removeAlarm(id) {
+      if (!confirm("Permanently delete this alarm log?")) return;
+      
+      try {
+        const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+        const json = await res.json();
+        
+        if (json.success) {
+          showNotification('Alarm log deleted', 'success');
+          fetchAlarms();
+        }
+      } catch(e) {
+        showNotification('Failed to delete', 'error');
+      }
+    }
+
+    // Custom Notification
+    function showNotification(message, type) {
+      const div = document.createElement('div');
+      div.style.cssText = `
+        position: fixed; top: 20px; right: 20px; padding: 12px 24px;
+        background: ${type === 'success' ? '#10b981' : '#ef4444'};
+        color: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 10px;
+        animation: slideIn 0.3s ease;
+      `;
+      div.innerHTML = `<i class="fas ${type==='success'?'fa-check':'fa-times'}"></i> ${message}`;
+      document.body.appendChild(div);
+      
+      // CSS Animation insert
+      const style = document.createElement('style');
+      style.innerHTML = `@keyframes slideIn { from { transform: translateX(100%); opacity:0; } to { transform: translateX(0); opacity:1; } }`;
+      document.head.appendChild(style);
+
+      setTimeout(() => {
+        div.style.opacity = '0';
+        div.style.transform = 'translateX(100%)';
+        div.style.transition = 'all 0.3s';
+        setTimeout(() => div.remove(), 300);
+      }, 3000);
+    }
+
+    // --- INIT ---
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchAlarms();
+        // Auto refresh setiap 10 detik
+        setInterval(fetchAlarms, 10000);
     });
   </script>
+
 </body>
 </html>
