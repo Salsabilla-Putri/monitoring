@@ -91,7 +91,7 @@ const mqttClient = mqtt.connect(process.env.MQTT_BROKER || 'mqtt://10.136.18.227
 });
 
 let latestData = {
-    deviceId: 'ESP32_GENERATOR_01', timestamp: new Date(),
+    deviceId: 'GENERATOR #1', timestamp: new Date(),
     rpm: 0, volt: 0, amp: 0, power: 0, freq: 0, temp: 0, coolant: 0,
     fuel: 0, sync: 'OFF-GRID', status: 'STOPPED', oil: 0, iat: 0, map: 0, afr: 0, tps: 0
 };

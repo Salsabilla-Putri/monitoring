@@ -1,186 +1,256 @@
-const API_URL = '/api';
-let activeChart = null;
+// === CONFIGURATION ===
+const API_URL = '/api/engine-data/history';
 
-// --- UTILS ---
-const formatTime = (d) => new Date(d).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
-const formatDate = (d) => new Date(d).toLocaleDateString('id-ID', {day:'numeric', month:'short'});
+// Konfigurasi Parameter (Icon, Satuan, Warna)
+const SENSORS = {
+    rpm: { name: 'RPM', unit: 'rpm', icon: 'fas fa-tachometer-alt', color: '#1745a5' },
+    volt: { name: 'Voltage', unit: 'V', icon: 'fas fa-bolt', color: '#f97316' },
+    amp: { name: 'Current', unit: 'A', icon: 'fas fa-plug', color: '#ec4899' },
+    freq: { name: 'Frequency', unit: 'Hz', icon: 'fas fa-wave-square', color: '#8b5cf6' },
+    power: { name: 'Power', unit: 'kW', icon: 'fas fa-charging-station', color: '#14b8a6' },
+    temp: { name: 'Engine Temp', unit: '°C', icon: 'fas fa-thermometer-half', color: '#ef4444' },
+    coolant: { name: 'Coolant', unit: '°C', icon: 'fas fa-snowflake', color: '#06b6d4' },
+    fuel: { name: 'Fuel', unit: '%', icon: 'fas fa-gas-pump', color: '#10b981' },
+    oil: { name: 'Oil Press', unit: 'PSI', icon: 'fas fa-oil-can', color: '#6366f1' },
+    iat: { name: 'Intake Air', unit: '°C', icon: 'fas fa-wind', color: '#f59e0b' },
+    map: { name: 'MAP', unit: 'kPa', icon: 'fas fa-compress-arrows-alt', color: '#84cc16' },
+    afr: { name: 'AFR', unit: '', icon: 'fas fa-burn', color: '#3b82f6' }
+};
 
-// --- UPDATE DASHBOARD (REAL DATA) ---
-async function updateDashboard() {
+let myChart = null;
+
+// --- 1. INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Load Sidebar
+    fetch('sidebar.html').then(r => r.text()).then(h => {
+        document.getElementById('sidebar-container').innerHTML = h;
+        if(window.initializeSidebar) window.initializeSidebar();
+    });
+
+    // Setup Date Inputs (Default: Last 24 Hours)
+    initDateInputs();
+
+    // Event Listeners
+    document.getElementById('applyDateRange').addEventListener('click', loadReportData);
+    document.querySelectorAll('.time-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            // Update input tanggal sesuai tombol
+            const hours = e.target.dataset.hours;
+            updateDateFromHours(hours);
+            loadReportData();
+        });
+    });
+
+    // First Load
+    loadReportData();
+});
+
+// --- 2. DATA FETCHING ---
+async function loadReportData() {
+    // Tampilkan Loading
+    document.getElementById('sensorsLoading').style.display = 'block';
+    document.getElementById('sensorsContainer').style.display = 'none';
+
+    // Ambil Filter Tanggal
+    const dFrom = document.getElementById('dateFrom').value;
+    const dTo = document.getElementById('dateTo').value;
+
+    // Buat URL Query
+    let url = `${API_URL}?limit=5000`; // Limit besar untuk akurasi
+    if (dFrom && dTo) {
+        // Tambahkan jam agar mencakup full day
+        const start = new Date(dFrom); start.setHours(0,0,0,0);
+        const end = new Date(dTo); end.setHours(23,59,59,999);
+        url += `&startDate=${start.toISOString()}&endDate=${end.toISOString()}`;
+    } else {
+        url += `&hours=24`; // Default
+    }
+
     try {
-        // 1. FETCH LATEST SENSOR DATA
-        const res = await fetch(`${API_URL}/engine-data/latest`);
+        const res = await fetch(url);
         const json = await res.json();
 
-        if (json.success && json.data) {
+        if (json.success) {
             const data = json.data;
-
-            // Overview Cards
-            setVal('val-rpm', data.rpm, ' RPM');
-            setVal('val-temp', (data.coolant || data.temp), '°C', 1);
-            setVal('val-volt', data.volt, ' V', 1);
-            
-            // Engine Status
-            const isRun = data.status === 'RUNNING';
-            const isSync = data.sync === 'ON-GRID';
-            
-            setStatus('engSync', isSync, 'Synchronized', 'Not Sync');
-            setStatus('engStat', isRun, 'Running', 'Inactive');
-            
-            const fuelEl = document.getElementById('fuelLevel');
-            fuelEl.innerText = Math.round(data.fuel) + '%';
-            fuelEl.className = data.fuel < 20 ? 'st-err' : 'st-ok';
-
-            document.getElementById('engLast').innerText = formatTime(data.timestamp);
-
-            // System Status (Threshold Checks)
-            checkThreshold('st-volt', data.volt, 200, 240);
-            checkThreshold('st-amp', data.amp, 0, 100);
-            checkThreshold('st-freq', data.freq, 49, 51);
-            checkThreshold('st-oil', data.oil, 20, 100);
-            checkThreshold('st-coolant', (data.coolant || data.temp), 0, 95);
-            checkThreshold('st-iat', data.iat, 0, 60);
-            checkThreshold('st-fuel', data.fuel, 20, 100);
-            checkThreshold('st-afr', data.afr, 12, 16);
+            updateOverview(data);
+            renderSensorCards(data);
+            updateChart(data);
+        } else {
+            console.error("API Error:", json.error);
         }
-
-        // 2. FETCH ALERT COUNT
-        const resAlert = await fetch(`${API_URL}/alerts?limit=10`);
-        const jsonAlert = await resAlert.json();
-        if (jsonAlert.success) {
-            const active = jsonAlert.data.filter(a => !a.resolved);
-            document.getElementById('val-alerts').innerText = active.length;
-            renderRecentAlerts(jsonAlert.data.slice(0, 3)); // Top 3
-        }
-
-    } catch (e) { console.error("Dashboard update failed", e); }
-}
-
-// --- HELPERS ---
-function setVal(id, val, suffix, fix=0) {
-    const el = document.getElementById(id);
-    if(el && val != null) el.innerText = Number(val).toFixed(fix) + suffix;
-}
-
-function setStatus(id, condition, textTrue, textFalse) {
-    const el = document.getElementById(id);
-    el.innerText = condition ? textTrue : textFalse;
-    el.className = condition ? 'st-ok' : 'st-err';
-}
-
-function checkThreshold(id, val, min, max) {
-    const el = document.getElementById(id);
-    if(!el) return;
-    if(val == null) { el.innerText = '--'; return; }
-    
-    if (val >= min && val <= max) {
-        el.innerText = 'Normal'; el.className = 'st-ok';
-    } else {
-        el.innerText = val < min ? 'Low' : 'Critical';
-        el.className = 'st-err';
+    } catch (e) {
+        console.error("Fetch Error:", e);
+    } finally {
+        // Sembunyikan Loading
+        document.getElementById('sensorsLoading').style.display = 'none';
+        document.getElementById('sensorsContainer').style.display = 'grid';
     }
 }
 
-function renderRecentAlerts(alerts) {
-    const container = document.getElementById('alertContainer');
-    if(!container) return;
+// --- 3. UI UPDATE FUNCTIONS ---
+
+function updateOverview(data) {
+    if (!data.length) return;
+
+    // Hitung Statistik Sederhana
+    const activeRecords = data.filter(d => d.rpm > 0);
+    const totalHours = (activeRecords.length * 5) / 3600; // Asumsi interval 5 detik
+    
+    // Hitung Hari Aktif
+    const daysSet = new Set(activeRecords.map(d => new Date(d.timestamp).toDateString()));
+    
+    // Hitung Rata-rata Harian
+    const avgDaily = daysSet.size > 0 ? (totalHours / daysSet.size) : 0;
+
+    // Cari Sesi Terpanjang (Sederhana)
+    let maxSession = 0, currSession = 0;
+    // Sort dulu data dari lama ke baru
+    const sorted = [...data].sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+    for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i].rpm > 0) {
+            const diff = (new Date(sorted[i].timestamp) - new Date(sorted[i-1].timestamp)) / 1000;
+            if (diff < 300) currSession += diff; // Gabung jika jeda < 5 menit
+            else currSession = 0;
+            if (currSession > maxSession) maxSession = currSession;
+        }
+    }
+
+    // Update Text
+    setText('dailyAverage', `${avgDaily.toFixed(1)} hrs`);
+    setText('totalHours', `${totalHours.toFixed(1)} hrs`);
+    setText('daysActive', `${daysSet.size} days`);
+    setText('longestSession', `${(maxSession/3600).toFixed(1)} hrs`);
+}
+
+function renderSensorCards(data) {
+    const container = document.getElementById('sensorsContainer');
     container.innerHTML = '';
 
-    if(alerts.length === 0) {
-        container.innerHTML = `<div style="text-align:center; color:#aaa; padding:10px;">No recent alerts</div>`;
+    if (data.length === 0) {
+        container.innerHTML = '<p style="grid-column:1/-1;text-align:center">No data found</p>';
         return;
     }
 
-    alerts.forEach(a => {
-        let type = 'info', icon = 'fa-info-circle';
-        if(a.severity === 'critical') { type = ''; icon = 'fa-exclamation-triangle'; } // Red style
-        else if(a.severity === 'medium') { type = 'warning'; icon = 'fa-exclamation-circle'; } // Yellow style
+    // Ambil data terakhir untuk "Current Value"
+    const latest = data[0] || {};
 
-        const html = `
-            <div class="alert-item ${type}">
-                <div class="alert-icon"><i class="fas ${icon}"></i></div>
-                <div class="alert-content">
-                    <div class="alert-title">${a.message}</div>
-                    <div class="alert-desc">Param: ${a.parameter || 'Sys'} | Val: ${a.value}</div>
+    Object.keys(SENSORS).forEach(key => {
+        const conf = SENSORS[key];
+        const vals = data.map(d => d[key]).filter(v => v != null);
+        
+        if (vals.length === 0) return;
+
+        // Hitung Min/Max/Avg
+        const min = Math.min(...vals);
+        const max = Math.max(...vals);
+        const avg = vals.reduce((a,b) => a+b, 0) / vals.length;
+        const current = latest[key] || 0;
+
+        const card = document.createElement('div');
+        card.className = 'sensor-card';
+        card.innerHTML = `
+            <div class="sensor-header">
+                <div class="sensor-name">
+                    <div class="sensor-icon" style="color:${conf.color}"><i class="${conf.icon}"></i></div>
+                    ${conf.name}
                 </div>
-                <div class="alert-time">${formatDate(a.timestamp)}</div>
+            </div>
+            <div class="sensor-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Average</span>
+                    <span class="stat-value">${avg.toFixed(1)} ${conf.unit}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Min / Max</span>
+                    <span class="stat-value">${min.toFixed(0)} / ${max.toFixed(0)}</span>
+                </div>
+                <div class="stat-item" style="grid-column:span 2; margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
+                    <span class="stat-label">Latest Value</span>
+                    <span class="stat-value" style="color:${conf.color}">${current.toFixed(1)} ${conf.unit}</span>
+                </div>
             </div>
         `;
-        container.innerHTML += html;
+        container.appendChild(card);
     });
 }
 
-// --- CHART: ACTIVE TIME (Last 7 Days) ---
-async function initChart() {
-    const ctx = document.getElementById('chartActive').getContext('2d');
-    try {
-        const res = await fetch(`${API_URL}/engine-data/history?hours=168`); // 7 days
-        const json = await res.json();
-        
-        let labels = [], data = [];
-        
-        if(json.success) {
-            const days = {};
-            const today = new Date();
-            // Init 7 days
-            for(let i=6; i>=0; i--) {
-                const d = new Date(); d.setDate(today.getDate()-i);
-                days[d.toDateString()] = 0;
-            }
-            // Fill Data
-            json.data.forEach(r => {
-                if(r.rpm > 0) {
-                    const k = new Date(r.timestamp).toDateString();
-                    if(days[k] !== undefined) days[k] += (5/3600); // ~5s per record
-                }
-            });
-            labels = Object.keys(days).map(k => new Date(k).toLocaleDateString('id-ID', {weekday:'short'}));
-            data = Object.values(days);
+function updateChart(data) {
+    const ctx = document.getElementById('mainChart').getContext('2d');
+    if (myChart) myChart.destroy();
 
-            // Today's Active Text
-            const todayHrs = days[today.toDateString()] || 0;
-            const h = Math.floor(todayHrs);
-            const m = Math.round((todayHrs-h)*60);
-            document.getElementById('engToday').innerText = `${h}h ${m}m`;
+    // Downsample agar grafik tidak berat (ambil 1 dari setiap N data)
+    const factor = Math.ceil(data.length / 100);
+    const chartData = data
+        .filter((_, i) => i % factor === 0)
+        .sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartData.map(d => new Date(d.timestamp)),
+            datasets: [
+                {
+                    label: 'RPM',
+                    data: chartData.map(d => d.rpm),
+                    borderColor: '#1745a5',
+                    backgroundColor: 'rgba(23, 69, 165, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'Voltage',
+                    data: chartData.map(d => d.volt),
+                    borderColor: '#f97316',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top' } },
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { 
+                    type: 'time', 
+                    time: { unit: 'minute', displayFormats: { minute: 'HH:mm' } },
+                    grid: { display: false }
+                },
+                y: { position: 'left', title: {display:true, text:'RPM'} },
+                y1: { position: 'right', grid:{drawOnChartArea:false}, title: {display:true, text:'Voltage'} }
+            }
         }
-
-        activeChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Hours Active',
-                    data: data,
-                    backgroundColor: '#1745a5',
-                    borderRadius: 4
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: { 
-                    y: { beginAtZero: true, title: {display:true, text:'Hours'} },
-                    x: { grid: { display: false } }
-                }
-            }
-        });
-    } catch(e) { console.error("Chart err", e); }
+    });
 }
 
-// --- STARTUP ---
-document.addEventListener('DOMContentLoaded', () => {
-    // Sidebar
-    fetch('sidebar.html').then(r=>r.text()).then(h => {
-        document.getElementById('sidebar-container').innerHTML = h;
-        const s = document.createElement('script'); s.src = 'sidebar.js'; document.body.appendChild(s);
-    });
+// --- UTILS ---
+function setText(id, val) {
+    const el = document.getElementById(id);
+    if(el) el.innerText = val;
+}
 
-    // User & Clock
-    document.getElementById('username').innerText = localStorage.getItem('userRole') || 'Operator';
-    setInterval(() => document.getElementById('clock').innerText = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}), 1000);
+function initDateInputs() {
+    const now = new Date();
+    const prev = new Date(); prev.setDate(now.getDate() - 1);
+    
+    // Format YYYY-MM-DD
+    const toDateVal = (d) => d.toISOString().split('T')[0];
+    
+    document.getElementById('dateTo').value = toDateVal(now);
+    document.getElementById('dateFrom').value = toDateVal(prev);
+}
 
-    // Data Loop
-    updateDashboard();
-    initChart();
-    setInterval(updateDashboard, 5000);
-});
+function updateDateFromHours(hours) {
+    const now = new Date();
+    const past = new Date(now.getTime() - (hours * 60 * 60 * 1000));
+    
+    document.getElementById('dateTo').value = now.toISOString().split('T')[0];
+    document.getElementById('dateFrom').value = past.toISOString().split('T')[0];
+}
