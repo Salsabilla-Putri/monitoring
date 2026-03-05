@@ -408,6 +408,29 @@ app.delete('/api/maintenance/:id', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+// Tambahkan kode ini di dalam server.js (sebelum app.listen)
+
+// Definisi Schema untuk Report (Sesuaikan field dengan database Anda)
+const reportSchema = new mongoose.Schema({
+    timestamp: { type: Date, default: Date.now },
+    engineId: String,
+    temperature: Number,
+    rpm: Number,
+    status: String
+}, { collection: 'reports' }); // Pastikan nama collection sesuai
+
+const Report = mongoose.model('Report', reportSchema);
+
+// API Endpoint untuk mengambil data report
+app.get('/api/reports', async (req, res) => {
+    try {
+        // Ambil semua data, urutkan dari yang terbaru
+        const reports = await Report.find().sort({ timestamp: -1 }).limit(100);
+        res.json(reports);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
 
 // const maintenanceSchema = new mongoose.Schema({
 //     task: { type: String, required: true },
