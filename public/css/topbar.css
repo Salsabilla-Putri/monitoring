@@ -23,7 +23,7 @@
 }
 
 .topbar-title {
-    font-size: 20px;
+    font-size: var(--heading-page-size);
     font-weight: 700;
     color: #1745a5;
     color: var(--primary, #1745a5);
@@ -37,7 +37,7 @@
     color: white;
     padding: 6px 16px;
     border-radius: 20px;
-    font-size: 14px;
+    font-size: var(--text-base-size);
     font-weight: 600;
     display: flex;
     align-items: center;
