@@ -4,21 +4,22 @@
   <meta charset="utf-8" />
   <title>Gen-Track — Engine Status</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
+
   <!-- PENTING: Urutan CSS harus konsisten - sidebar PERTAMA -->
   <link rel="stylesheet" href="sidebar.css">
   <link rel="stylesheet" href="css/topbar.css">
-  <link rel="stylesheet" href="css/engine.css"> 
+  <link rel="stylesheet" href="css/engine.css">
+  <link rel="stylesheet" href="css/typography.css">
 </head>
 <body>
 
   <div id="sidebar-container"></div>
 
   <div class="main-content">
-    
+
     <div class="topbar">
       <div class="topbar-title">Engine Real-Time Status</div>
       <div style="display:flex; align-items:center; gap:15px;">
@@ -30,7 +31,7 @@
     </div>
 
     <div class="engine-page-container" style="padding: 20px;">
-      
+
       <div class="card" style="margin-bottom:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <h3 style="margin:0; color:var(--accent)">Engine Parameters</h3>
@@ -69,7 +70,7 @@
           <h4>Power (W)</h4>
           <div id="powerVal" class="param-val numeric normal">--</div>
         </div>
-        
+
         <div class="param-box box-ok" id="box_oil">
           <h4>Oil Pressure (PSI)</h4>
           <div class="bar-wrap"><div id="oilBar" class="bar-fill" style="width: 0%"></div></div>
@@ -154,9 +155,9 @@
         </table>
       </div>
 
-    </div> 
-  </div> 
-  
+    </div>
+  </div>
+
   <div id="thresholdModal" class="modal-bg">
     <div class="modal-card">
       <h3 id="modalParamTitle" style="margin-top:0">Set Threshold</h3>
