@@ -5,16 +5,20 @@
   <title>Gen-Track — Maintenance</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;">
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <link rel="stylesheet" href="sidebar.css">
-  <link rel="stylesheet" href="css/topbar.css">     <link rel="stylesheet" href="css/maintenance.css"> </head>
+  <link rel="stylesheet" href="css/topbar.css">
+  <link rel="stylesheet" href="css/maintenance.css"> 
+</head>
 <body>
-  <div class="container">
-    <div id="sidebar-container"></div>
+
+  <div id="sidebar-container"></div>
+
+  <div class="main-content">
 
     <div class="topbar">
       <div class="topbar-title">Maintenance Management</div>
@@ -23,7 +27,8 @@
       </div>
     </div>
 
-    <div class="main-content">
+    <div class="maintenance-page-container" style="padding: 20px;">
+      
       <div class="maintenance-summary">
         <div class="summary-card overdue">
           <div class="summary-value" id="overdueCount">0</div>
@@ -100,8 +105,9 @@
           <tbody id="historyTableBody"></tbody>
         </table>
       </div>
-    </div>
-  </div>
+
+    </div> 
+  </div> 
 
   <div id="addMaintenanceModal" class="modal">
     <div class="modal-content">
@@ -141,9 +147,9 @@
             <div class="form-group">
               <label class="form-label">Assigned To</label>
               <select id="assignedTo" class="form-control">
-                <option value="Operator">Operator</option>
-                <option value="Technician A">Technician A</option>
-                <option value="External">External Vendor</option>
+                <option value="Salsabilla">Salsabilla</option>
+                <option value="Stewart">Stewart</option>
+                <option value="Rifananda">Rifananda</option>
               </select>
             </div>
           </div>
@@ -158,7 +164,7 @@
 
   <div id="notification" class="notification"></div>
 
-  <script src="sidebar.js"></script>
+  <script src="js/sidebar.js"></script>
   <script src="js/maintenance.js"></script>
 </body>
 </html>

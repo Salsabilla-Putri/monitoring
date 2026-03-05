@@ -189,10 +189,8 @@ function exportCSV() {
 // --- INIT ---
 document.addEventListener('DOMContentLoaded', () => {
     // Load Sidebar
-    fetch('sidebar.html').then(r=>r.text()).then(h => {
-        document.getElementById('sidebar-container').innerHTML = h;
-        if(window.initializeSidebar) window.initializeSidebar();
-    });
+    fetch('sidebar.html').then(r=>r.text()).then(h =>document.getElementById('sidebar-container').innerHTML = h);
+    document.getElementById('userarea').querySelector('span').innerText = localStorage.getItem('userRole') || 'Operator';
     
     // User Info
     const user = localStorage.getItem('userRole') || 'Operator';

@@ -8,25 +8,28 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <link rel="stylesheet" href="sidebar.css">
   <link rel="stylesheet" href="css/topbar.css">
   <link rel="stylesheet" href="css/engine.css"> 
+  <link rel="stylesheet" href="sidebar.css">
 </head>
 <body>
-  <div class="container">
-    <div id="sidebar-container"></div>
 
+  <div id="sidebar-container"></div>
+
+  <div class="main-content">
+    
     <div class="topbar">
       <div class="topbar-title">Engine Real-Time Status</div>
       <div style="display:flex; align-items:center; gap:15px;">
         <div id="apiStatus" style="font-size:12px; color:var(--muted);">Connecting...</div>
-        <div id="userarea" class="topbar-user">
-          <i class="fas fa-user"></i> <span>Operator</span>
-        </div>
+      <div class="user-info" id="userarea">
+        <i class="fas fa-user"></i> <span>Operator</span>
+      </div>
       </div>
     </div>
 
-    <div class="main-content">
+    <div class="engine-page-container" style="padding: 20px;">
+      
       <div class="card" style="margin-bottom:14px;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <h3 style="margin:0; color:var(--accent)">Engine Parameters</h3>
@@ -149,10 +152,8 @@
           </tbody>
         </table>
       </div>
-    </div>
-  </div>
 
-  <div id="thresholdModal" class="modal-bg">
+    </div> </div> <div id="thresholdModal" class="modal-bg">
     <div class="modal-card">
       <h3 id="modalParamTitle" style="margin-top:0">Set Threshold</h3>
       <div class="modal-row">
@@ -174,7 +175,7 @@
     </div>
   </div>
 
-  <script src="sidebar.js"></script>
+  <script src="js/sidebar.js"></script>
   <script src="js/engine.js"></script>
 </body>
 </html>

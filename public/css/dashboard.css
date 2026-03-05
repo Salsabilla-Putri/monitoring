@@ -83,11 +83,93 @@ body {
 }
 
 /* Grid 2 Kolom (Untuk Chart, Alerts) */
+/* === GRID LAYOUTS (UPDATED) === */
+/* ... grid lainnya tetap ... */
+
+/* Grid 2 Kolom (Chart & Alerts) - UBAH JADI 1:1 */
 .grid-2 { 
     display: grid; 
-    grid-template-columns: 2fr 1fr; /* Chart lebih lebar dari Alert */
+    grid-template-columns: 1fr 1fr; /* Sama Besar */
     gap: 25px; 
     margin-bottom: 25px; 
+}
+
+/* === NEW ALERT CARD STYLES === */
+#alertContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.alert-card {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    border-radius: 12px; /* Radius lebih bulat */
+    background: #fff;
+    position: relative;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+    transition: transform 0.2s;
+}
+
+.alert-card:hover {
+    transform: translateX(5px);
+}
+
+/* Style Garis Tepi Kiri & Background */
+.ac-critical { background: #fff5f5; border-left: 6px solid #ef4444; }
+.ac-warning  { background: #fffaf0; border-left: 6px solid #f97316; }
+.ac-info     { background: #eff6ff; border-left: 6px solid #3b82f6; }
+
+/* Icon Circle */
+.ac-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+    margin-right: 15px;
+    flex-shrink: 0;
+}
+
+.ac-critical .ac-icon { background: #ef4444; }
+.ac-warning .ac-icon  { background: #f97316; }
+.ac-info .ac-icon     { background: #3b82f6; }
+
+/* Text Content */
+.ac-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.ac-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #1e293b;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+}
+
+.ac-desc {
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* Date Text */
+.ac-date {
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 600;
+    margin-left: 10px;
+}
+
+/* Responsive: Jika layar kecil, chart turun ke bawah */
+@media (max-width: 992px) {
+    .grid-2 { grid-template-columns: 1fr; }
 }
 
 /* === CARDS === */

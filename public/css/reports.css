@@ -264,3 +264,138 @@ body {
     .filter-section { flex-direction: column; align-items: flex-start; gap: 15px; }
     .date-range { width: 100%; justify-content: space-between; flex-wrap: wrap; }
 }
+
+/* === ADDITIONAL STYLES FOR REPORTS === */
+
+/* Loading animation */
+.fa-spin {
+    animation: fa-spin 2s infinite linear;
+}
+
+@keyframes fa-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Error and no-data states */
+.error-message, .no-data {
+    background: white;
+    border-radius: 15px;
+    padding: 40px;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+}
+
+/* Chart container visibility */
+#chartContainer {
+    display: block !important; /* Override hidden state */
+    margin-top: 20px;
+}
+
+/* Sensor card improvements */
+.sensor-icon {
+    transition: all 0.3s ease;
+}
+
+.sensor-card:hover .sensor-icon {
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(23, 69, 165, 0.2);
+}
+
+/* Responsive improvements */
+@media (max-width: 1024px) {
+    .sensors-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .sensors-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .filter-section {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+    
+    .date-range {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .date-selector {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+}
+
+/* === LOADING & ERROR STATES === */
+#sensorsLoading {
+    text-align: center;
+    padding: 40px;
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    margin: 20px 0;
+}
+
+#sensorsLoading i {
+    margin-right: 10px;
+    color: #1745a5;
+}
+
+/* === CHART CONTAINER STRUCTURE === */
+.chart-content {
+    height: 400px;
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+}
+
+/* === DATE PICKER STYLES === */
+.date-input {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 14px;
+    color: #0f172a;
+}
+
+.date-input:focus {
+    outline: none;
+    border-color: #1745a5 !important;
+    box-shadow: 0 0 0 3px rgba(23, 69, 165, 0.1);
+}
+
+/* === RESPONSIVE IMPROVEMENTS === */
+@media (max-width: 768px) {
+    .filter-section {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+    
+    .date-range {
+        width: 100%;
+    }
+    
+    .date-selector {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .date-selector > div {
+        width: 100%;
+    }
+    
+    #dateFrom, #dateTo {
+        width: 100% !important;
+    }
+    
+    .apply-btn {
+        width: 100%;
+        margin-top: 10px;
+    }
+}

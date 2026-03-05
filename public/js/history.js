@@ -193,9 +193,9 @@ function renderTable() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${row.rawDate.toLocaleString('id-ID')}</td>
-            <td><b>${row.generator}</b></td>
+            <td>${row.generator}</td>
             <td>${row.label}</td>
-            <td style="font-weight:bold">${Number(row.value).toFixed(1)}</td>
+            <td>${Number(row.value).toFixed(1)}</td>
             <td>${row.unit}</td>
             <td><span class="status-badge status-${row.status}">${row.status}</span></td>
         `;

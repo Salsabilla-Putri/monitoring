@@ -7,9 +7,9 @@ const formatDate = (d) => new Date(d).toLocaleDateString('id-ID', {day:'numeric'
 
 // --- UPDATE DASHBOARD ---
 async function updateDashboard() {
-    await updateSensorData();     // 1. Update Sensor
-    await updateMaintenanceLog(); // 2. Update Maintenance (WAJIB ADA)
-    await updateAlerts();         // 3. Update Alerts
+    await updateSensorData();
+    await updateMaintenanceLog();
+    await updateAlerts();
 }
 
 // 1. SENSOR DATA
@@ -41,26 +41,19 @@ async function updateSensorData() {
                 fuelEl.className = fuel < 20 ? 'st-err' : 'st-ok';
             }
             
-            const lastEl = document.getElementById('engLast');
-            if(lastEl) lastEl.innerText = formatTime(data.timestamp);
-
-            // System Health
+            // System Health Check Limits
             checkLimit('st-volt', data.volt, 200, 240);
             checkLimit('st-amp', data.amp, 0, 100);
             checkLimit('st-freq', data.freq, 48, 52);
-            checkLimit('st-oil', data.oil, 20, 100);
-            checkLimit('st-coolant', (data.coolant||data.temp), 0, 95);
-            checkLimit('st-iat', data.iat, 0, 60);
             checkLimit('st-fuel', data.fuel, 20, 100);
             checkLimit('st-afr', data.afr, 10, 18);
         }
     } catch (e) { console.warn("Sensor Error", e); }
 }
 
-// 2. MAINTENANCE LOG (INI YANG MEMPERBAIKI MASALAH ANDA)
+// 2. MAINTENANCE LOG
 async function updateMaintenanceLog() {
     try {
-        // Panggil API Server yang sudah Anda buat di server.js
         const res = await fetch(`${API_URL}/maintenance`);
         if (!res.ok) return;
 
@@ -68,15 +61,11 @@ async function updateMaintenanceLog() {
         const container = document.getElementById('maintenanceContainer');
 
         if (json.success && json.data.length > 0 && container) {
-            container.innerHTML = ''; // Hapus spinner loading
-            
-            // Ambil 4 data terbaru
+            container.innerHTML = ''; 
             const logs = json.data.slice(0, 4);
 
             logs.forEach(log => {
                 const dateStr = new Date(log.dueDate || log.createdAt).toLocaleDateString('id-ID', {day:'numeric', month:'short'});
-                
-                // Style Status
                 let color = '#64748b';
                 if(log.status === 'completed') color = '#10b981';
                 if(log.status === 'overdue') color = '#ef4444';
@@ -109,7 +98,6 @@ async function updateAlerts() {
             const active = json.data.filter(a => !a.resolved);
             const badge = document.getElementById('val-alerts');
             if(badge) badge.innerText = active.length;
-            
             renderAlertList(json.data.slice(0, 3));
         }
     } catch (e) { console.warn("Alert Error", e); }
@@ -124,20 +112,56 @@ function checkLimit(id, v, min, max) {
     if(v>=min && v<=max){e.innerText='Normal'; e.className='st-ok';}
     else{e.innerText=v<min?'Low':'High'; e.className='st-err';}
 }
+// ... (Kode sebelumnya tetap sama) ...
+
+// --- MODIFIKASI FUNGSI INI ---
+
+// 3. ALERTS (Updated Logic)
 function renderAlertList(arr) {
     const c = document.getElementById('alertContainer');
     if(!c) return;
     c.innerHTML = '';
-    if(!arr.length) { c.innerHTML='<div style="text-align:center;color:#aaa;padding:15px">No recent alerts</div>'; return; }
+    
+    if(!arr.length) { 
+        c.innerHTML='<div style="text-align:center;color:#aaa;padding:25px; font-style:italic;">No recent alerts</div>'; 
+        return; 
+    }
+
     arr.forEach(a => {
-        let type='info', icon='fa-info-circle';
-        if(a.severity==='critical'){type='alert-item'; icon='fa-exclamation-circle';}
-        else if(a.severity==='medium'){type='alert-item warning'; icon='fa-exclamation-triangle';}
-        c.innerHTML += `<div class="${type}"><div class="alert-icon"><i class="fas ${icon}"></i></div><div class="alert-content"><div class="alert-title">${a.message}</div><div class="alert-time">${formatTime(a.timestamp)}</div></div></div>`;
+        // Tentukan Style berdasarkan Severity
+        let styleClass = 'ac-info';
+        let iconClass = 'fa-info';
+        
+        if(a.severity === 'critical') { 
+            styleClass = 'ac-critical'; 
+            iconClass = 'fa-exclamation'; 
+        } else if(a.severity === 'medium' || a.severity === 'warning') { 
+            styleClass = 'ac-warning'; 
+            iconClass = 'fa-exclamation-triangle'; 
+        }
+
+        // Pisahkan Parameter dan Pesan agar rapi
+        // Jika data parameter ada, gunakan sebagai judul. Jika tidak, ambil kata pertama pesan.
+        const title = a.parameter ? a.parameter : 'System Alert';
+        const desc = a.message; 
+        const dateStr = new Date(a.timestamp).toLocaleDateString('id-ID'); // Format: 12/11/2025
+
+        // Generate HTML Card Baru
+        c.innerHTML += `
+        <div class="alert-card ${styleClass}">
+            <div class="ac-icon">
+                <i class="fas ${iconClass}"></i>
+            </div>
+            <div class="ac-content">
+                <div class="ac-title">${title}</div>
+                <div class="ac-desc">${desc}</div>
+            </div>
+            <div class="ac-date">${dateStr}</div>
+        </div>`;
     });
 }
 
-// --- CHART ---
+// --- MODIFIKASI CHART INI ---
 async function initChart() {
     const ctx = document.getElementById('chartActive')?.getContext('2d');
     if(!ctx) return;
@@ -149,20 +173,27 @@ async function initChart() {
 
         if(json.success && json.data.length) {
             const days = {}; const today = new Date();
-            for(let i=6; i>=0; i--) { const d=new Date(); d.setDate(today.getDate()-i); days[d.toDateString()]=0; }
+            // Siapkan 7 hari terakhir
+            for(let i=6; i>=0; i--) { 
+                const d=new Date(); d.setDate(today.getDate()-i); 
+                days[d.toDateString()]=0; 
+            }
             
-            // Logic Time Difference
             const sorted = json.data.sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
             for(let i=1; i<sorted.length; i++) {
                 if(sorted[i].rpm > 0) {
                     const diff = (new Date(sorted[i].timestamp) - new Date(sorted[i-1].timestamp))/1000;
-                    if(diff>0 && diff<300) days[new Date(sorted[i].timestamp).toDateString()] += (diff/3600);
+                    // Filter noise data (gap < 5 menit dianggap continuous)
+                    if(diff>0 && diff<300) {
+                         days[new Date(sorted[i].timestamp).toDateString()] += (diff/3600);
+                    }
                 }
             }
-            labels = Object.keys(days).map(k=>new Date(k).toLocaleDateString('id-ID',{weekday:'short'}));
+            
+            labels = Object.keys(days).map(k=>new Date(k).toLocaleDateString('id-ID',{weekday:'short'})); // Sen, Sel, Rab...
             dataPoints = Object.values(days);
             
-            // Today Text
+            // Update Text "Today's Active"
             const tVal = days[today.toDateString()]||0;
             const h=Math.floor(tVal); const m=Math.round((tVal-h)*60);
             const tEl = document.getElementById('engToday');
@@ -170,24 +201,49 @@ async function initChart() {
         }
 
         if(activeChart) activeChart.destroy();
+        
         activeChart = new Chart(ctx, {
-            type:'bar',
-            data:{
+            type: 'bar',
+            data: {
                 labels: labels.length ? labels : ['Min','Sen','Sel','Rab','Kam','Jum','Sab'],
-                datasets:[{ label:'Active Hours', data:dataPoints.length?dataPoints:[0,0,0,0,0,0,0], backgroundColor:'#1745a5', borderRadius:4 }]
+                datasets: [{ 
+                    label: 'Active Hours', 
+                    data: dataPoints.length ? dataPoints : [0,0,0,0,0,0,0], 
+                    backgroundColor: '#1745a5', 
+                    borderRadius: 6, // Sedikit lebih bulat
+                    barPercentage: 0.6 // Agar batang tidak terlalu gemuk
+                }]
             },
-            options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}, x:{grid:{display:false}}} }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: {
+                    legend: { display: false }
+                }, 
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        max: 24, // --- FIX: MAX 24 JAM ---
+                        title: {
+                            display: true,
+                            text: 'Hours'
+                        }
+                    }, 
+                    x: { 
+                        grid: { display: false }
+                    }
+                } 
+            }
         });
     } catch(e) { console.error(e); }
 }
 
+// ... (Sisa kode init dll tetap sama) ...
+
 // --- INIT ---
 document.addEventListener('DOMContentLoaded', () => {
-    fetch('sidebar.html').then(r=>r.text()).then(h=>{ 
-        document.getElementById('sidebar-container').innerHTML=h; 
-        if(window.initializeSidebar) window.initializeSidebar();
-    });
-
+    // HAPUS FETCH SIDEBAR DARI SINI, BIARKAN sidebar.js YANG MENANGANI
+    
     setInterval(() => {
         const el = document.getElementById('clock');
         if(el) el.innerText = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});

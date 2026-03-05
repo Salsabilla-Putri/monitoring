@@ -13,8 +13,10 @@
     <link rel="stylesheet" href="css/reports.css">
 </head>
 <body>
-    <div class="container">
-        <div id="sidebar-container"></div>
+
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
 
         <div class="topbar">
             <div class="topbar-title">Reports & Analysis</div>
@@ -23,7 +25,8 @@
             </div>
         </div>
 
-        <div class="main-content">
+        <div class="reports-page-container" style="padding: 20px;">
+            
             <div class="overview-cards">
                 <div class="overview-card">
                     <div class="overview-icon primary"><i class="fas fa-clock"></i></div>
@@ -65,6 +68,30 @@
                 </div>
                 
                 <div id="sensorsContainer" class="sensors-grid" style="display: none;"></div>
+                <!-- SENSOR CARD TEMPLATE -->
+<template id="sensorCardTemplate">
+    <div class="sensor-card">
+        <div class="sensor-header">
+            <h4 class="sensor-name">Sensor Name</h4>
+            <span class="sensor-unit">--</span>
+        </div>
+
+        <div class="sensor-value">--</div>
+
+        <!-- SENSOR FOOTER (WARNING & CRITICAL COUNT) -->
+        <div class="sensor-footer">
+            <span class="warn-count">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span class="warn-value">0</span> Warning
+            </span>
+            <span class="crit-count">
+                <i class="fas fa-skull-crossbones"></i>
+                <span class="crit-value">0</span> Critical
+            </span>
+        </div>
+    </div>
+</template>
+
             </div>
 
             <div class="executive-summary">
@@ -81,23 +108,7 @@
                     </div>
                     <div class="date-range">
                         <div class="date-selector">
-                            <div>
-                                <label style="font-size:12px; color:#666;">Start Date</label>
-                                <div style="display: flex; gap: 5px;">
-                                    <select id="start-year"><option value="">Year</option></select>
-                                    <select id="start-month"><option value="">Month</option></select>
-                                    <select id="start-day"><option value="">Day</option></select>
-                                </div>
-                            </div>
-                            <div style="align-self: center; margin: 0 5px;">to</div>
-                            <div>
-                                <label style="font-size:12px; color:#666;">End Date</label>
-                                <div style="display: flex; gap: 5px;">
-                                    <select id="end-year"><option value="">Year</option></select>
-                                    <select id="end-month"><option value="">Month</option></select>
-                                    <select id="end-day"><option value="">Day</option></select>
-                                </div>
-                            </div>
+                            <!-- Date picker akan dibuat otomatis oleh JavaScript -->
                         </div>
                         <button class="apply-btn" id="applyDateRange">Apply</button>
                     </div>
@@ -126,10 +137,8 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <script src="sidebar.js"></script>
+        </div> </div> <script src="js/sidebar.js"></script>
     <script src="js/reports.js"></script>
 </body>
 </html>

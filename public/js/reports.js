@@ -1,7 +1,9 @@
+// public/js/reports.js
+
 // === CONFIGURATION ===
 const API_URL = '/api/engine-data/history';
 
-// Konfigurasi Parameter (Icon, Satuan, Warna)
+// Konfigurasi Parameter
 const SENSORS = {
     rpm: { name: 'RPM', unit: 'rpm', icon: 'fas fa-tachometer-alt', color: '#1745a5' },
     volt: { name: 'Voltage', unit: 'V', icon: 'fas fa-bolt', color: '#f97316' },
@@ -18,239 +20,871 @@ const SENSORS = {
 };
 
 let myChart = null;
+let currentData = [];
+let selectedSensors = ['rpm', 'volt']; // Default sensors to show
 
-// --- 1. INITIALIZATION ---
+// --- 1. CHART MANAGEMENT ---
+function destroyChart() {
+    try {
+        if (myChart) {
+            myChart.destroy();
+            myChart = null;
+        }
+    } catch (error) {
+        console.warn('Error destroying chart:', error);
+        myChart = null;
+    }
+}
+
+// --- 2. INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Load Sidebar
-    fetch('sidebar.html').then(r => r.text()).then(h => {
-        document.getElementById('sidebar-container').innerHTML = h;
-        if(window.initializeSidebar) window.initializeSidebar();
-    });
-
-    // Setup Date Inputs (Default: Last 24 Hours)
-    initDateInputs();
-
-    // Event Listeners
-    document.getElementById('applyDateRange').addEventListener('click', loadReportData);
-    document.querySelectorAll('.time-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
-            // Update input tanggal sesuai tombol
-            const hours = e.target.dataset.hours;
-            updateDateFromHours(hours);
-            loadReportData();
-        });
-    });
-
-    // First Load
+    console.log('Reports.js initialized');
+    
+    initDatePickers();
+    setupEventListeners();
+    initSensorSelector();
     loadReportData();
 });
 
-// --- 2. DATA FETCHING ---
-async function loadReportData() {
-    // Tampilkan Loading
-    document.getElementById('sensorsLoading').style.display = 'block';
-    document.getElementById('sensorsContainer').style.display = 'none';
-
-    // Ambil Filter Tanggal
-    const dFrom = document.getElementById('dateFrom').value;
-    const dTo = document.getElementById('dateTo').value;
-
-    // Buat URL Query
-    let url = `${API_URL}?limit=5000`; // Limit besar untuk akurasi
-    if (dFrom && dTo) {
-        // Tambahkan jam agar mencakup full day
-        const start = new Date(dFrom); start.setHours(0,0,0,0);
-        const end = new Date(dTo); end.setHours(23,59,59,999);
-        url += `&startDate=${start.toISOString()}&endDate=${end.toISOString()}`;
-    } else {
-        url += `&hours=24`; // Default
-    }
-
-    try {
-        const res = await fetch(url);
-        const json = await res.json();
-
-        if (json.success) {
-            const data = json.data;
-            updateOverview(data);
-            renderSensorCards(data);
-            updateChart(data);
-        } else {
-            console.error("API Error:", json.error);
-        }
-    } catch (e) {
-        console.error("Fetch Error:", e);
-    } finally {
-        // Sembunyikan Loading
-        document.getElementById('sensorsLoading').style.display = 'none';
-        document.getElementById('sensorsContainer').style.display = 'grid';
-    }
-}
-
-// --- 3. UI UPDATE FUNCTIONS ---
-
-function updateOverview(data) {
-    if (!data.length) return;
-
-    // Hitung Statistik Sederhana
-    const activeRecords = data.filter(d => d.rpm > 0);
-    const totalHours = (activeRecords.length * 5) / 3600; // Asumsi interval 5 detik
+// --- 3. DATE PICKER FUNCTIONS ---
+function initDatePickers() {
+    const now = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
     
-    // Hitung Hari Aktif
-    const daysSet = new Set(activeRecords.map(d => new Date(d.timestamp).toDateString()));
+    // Format untuk input type="date"
+    const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
     
-    // Hitung Rata-rata Harian
-    const avgDaily = daysSet.size > 0 ? (totalHours / daysSet.size) : 0;
-
-    // Cari Sesi Terpanjang (Sederhana)
-    let maxSession = 0, currSession = 0;
-    // Sort dulu data dari lama ke baru
-    const sorted = [...data].sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
-    for (let i = 1; i < sorted.length; i++) {
-        if (sorted[i].rpm > 0) {
-            const diff = (new Date(sorted[i].timestamp) - new Date(sorted[i-1].timestamp)) / 1000;
-            if (diff < 300) currSession += diff; // Gabung jika jeda < 5 menit
-            else currSession = 0;
-            if (currSession > maxSession) maxSession = currSession;
+    // Cari atau buat date picker
+    const dateRangeDiv = document.querySelector('.date-range');
+    if (dateRangeDiv) {
+        let dateSelector = dateRangeDiv.querySelector('.date-selector');
+        if (!dateSelector) {
+            dateSelector = document.createElement('div');
+            dateSelector.className = 'date-selector';
+            const applyBtn = dateRangeDiv.querySelector('.apply-btn');
+            dateRangeDiv.insertBefore(dateSelector, applyBtn);
         }
-    }
-
-    // Update Text
-    setText('dailyAverage', `${avgDaily.toFixed(1)} hrs`);
-    setText('totalHours', `${totalHours.toFixed(1)} hrs`);
-    setText('daysActive', `${daysSet.size} days`);
-    setText('longestSession', `${(maxSession/3600).toFixed(1)} hrs`);
-}
-
-function renderSensorCards(data) {
-    const container = document.getElementById('sensorsContainer');
-    container.innerHTML = '';
-
-    if (data.length === 0) {
-        container.innerHTML = '<p style="grid-column:1/-1;text-align:center">No data found</p>';
-        return;
-    }
-
-    // Ambil data terakhir untuk "Current Value"
-    const latest = data[0] || {};
-
-    Object.keys(SENSORS).forEach(key => {
-        const conf = SENSORS[key];
-        const vals = data.map(d => d[key]).filter(v => v != null);
         
-        if (vals.length === 0) return;
-
-        // Hitung Min/Max/Avg
-        const min = Math.min(...vals);
-        const max = Math.max(...vals);
-        const avg = vals.reduce((a,b) => a+b, 0) / vals.length;
-        const current = latest[key] || 0;
-
-        const card = document.createElement('div');
-        card.className = 'sensor-card';
-        card.innerHTML = `
-            <div class="sensor-header">
-                <div class="sensor-name">
-                    <div class="sensor-icon" style="color:${conf.color}"><i class="${conf.icon}"></i></div>
-                    ${conf.name}
-                </div>
+        dateSelector.innerHTML = `
+            <div>
+                <label style="font-size:12px; color:#666;">Start Date</label>
+                <input type="date" id="dateFrom" class="date-input" 
+                       style="padding:8px; border:1px solid #d0d7e1; border-radius:4px; width:150px;">
             </div>
-            <div class="sensor-stats">
-                <div class="stat-item">
-                    <span class="stat-label">Average</span>
-                    <span class="stat-value">${avg.toFixed(1)} ${conf.unit}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Min / Max</span>
-                    <span class="stat-value">${min.toFixed(0)} / ${max.toFixed(0)}</span>
-                </div>
-                <div class="stat-item" style="grid-column:span 2; margin-top:5px; border-top:1px solid #eee; padding-top:5px;">
-                    <span class="stat-label">Latest Value</span>
-                    <span class="stat-value" style="color:${conf.color}">${current.toFixed(1)} ${conf.unit}</span>
-                </div>
+            <div style="align-self: center; margin: 0 10px; color:#666;">to</div>
+            <div>
+                <label style="font-size:12px; color:#666;">End Date</label>
+                <input type="date" id="dateTo" class="date-input" 
+                       style="padding:8px; border:1px solid #d0d7e1; border-radius:4px; width:150px;">
             </div>
         `;
-        container.appendChild(card);
-    });
+    }
+    
+    // Set nilai default
+    const dateFrom = document.getElementById('dateFrom');
+    const dateTo = document.getElementById('dateTo');
+    
+    if (dateFrom) {
+        dateFrom.value = formatDate(yesterday);
+        dateFrom.max = formatDate(now);
+    }
+    
+    if (dateTo) {
+        dateTo.value = formatDate(now);
+        dateTo.max = formatDate(now);
+        if (dateFrom) {
+            dateTo.min = dateFrom.value;
+        }
+    }
 }
 
-function updateChart(data) {
-    const ctx = document.getElementById('mainChart').getContext('2d');
-    if (myChart) myChart.destroy();
-
-    // Downsample agar grafik tidak berat (ambil 1 dari setiap N data)
-    const factor = Math.ceil(data.length / 100);
-    const chartData = data
-        .filter((_, i) => i % factor === 0)
-        .sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-    myChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: chartData.map(d => new Date(d.timestamp)),
-            datasets: [
-                {
-                    label: 'RPM',
-                    data: chartData.map(d => d.rpm),
-                    borderColor: '#1745a5',
-                    backgroundColor: 'rgba(23, 69, 165, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    fill: true,
-                    tension: 0.4
-                },
-                {
-                    label: 'Voltage',
-                    data: chartData.map(d => d.volt),
-                    borderColor: '#f97316',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.4,
-                    yAxisID: 'y1'
+// --- 4. SENSOR SELECTOR (untuk pilih sensor di chart) ---
+function initSensorSelector() {
+    // Buat selector sensor untuk chart
+    const chartHeader = document.querySelector('.chart-header');
+    if (chartHeader) {
+        const sensorSelector = document.createElement('div');
+        sensorSelector.className = 'sensor-selector';
+        sensorSelector.style.cssText = `
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        `;
+        
+        // Tambahkan beberapa sensor default
+        const defaultSensors = [
+            { key: 'rpm', name: 'RPM' },
+            { key: 'volt', name: 'Voltage' },
+            { key: 'temp', name: 'Temperature' },
+            { key: 'fuel', name: 'Fuel' }
+        ];
+        
+        defaultSensors.forEach(sensor => {
+            const btn = document.createElement('button');
+            btn.className = 'sensor-selector-btn';
+            btn.dataset.sensor = sensor.key;
+            btn.innerHTML = `<i class="${SENSORS[sensor.key]?.icon || 'fas fa-chart-line'}"></i> ${sensor.name}`;
+            btn.style.cssText = `
+                padding: 6px 12px;
+                border: 1px solid #d0d7e1;
+                border-radius: 4px;
+                background: ${selectedSensors.includes(sensor.key) ? '#1745a5' : '#f1f5f9'};
+                color: ${selectedSensors.includes(sensor.key) ? 'white' : '#0f172a'};
+                cursor: pointer;
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            `;
+            
+            btn.addEventListener('click', () => {
+                const sensorKey = btn.dataset.sensor;
+                const index = selectedSensors.indexOf(sensorKey);
+                
+                if (index === -1) {
+                    selectedSensors.push(sensorKey);
+                    btn.style.background = '#1745a5';
+                    btn.style.color = 'white';
+                } else {
+                    selectedSensors.splice(index, 1);
+                    btn.style.background = '#f1f5f9';
+                    btn.style.color = '#0f172a';
                 }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'top' } },
-            interaction: { mode: 'index', intersect: false },
-            scales: {
-                x: { 
-                    type: 'time', 
-                    time: { unit: 'minute', displayFormats: { minute: 'HH:mm' } },
-                    grid: { display: false }
-                },
-                y: { position: 'left', title: {display:true, text:'RPM'} },
-                y1: { position: 'right', grid:{drawOnChartArea:false}, title: {display:true, text:'Voltage'} }
+                
+                // Update chart dengan sensor yang dipilih
+                if (currentData.length > 0) {
+                    renderChart(currentData);
+                }
+            });
+            
+            sensorSelector.appendChild(btn);
+        });
+        
+        chartHeader.appendChild(sensorSelector);
+    }
+}
+
+// --- 5. EVENT LISTENERS ---
+function setupEventListeners() {
+    // Tombol preset waktu
+    document.querySelectorAll('.time-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Update active button
+            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Update dates
+            const hours = this.getAttribute('data-hours');
+            updateDateFromHours(hours);
+            
+            // Load data
+            loadReportData();
+        });
+    });
+    
+    // Tombol Apply
+    document.getElementById('applyDateRange')?.addEventListener('click', loadReportData);
+    
+    // Date picker change events
+    document.addEventListener('change', function(e) {
+        if (e.target.id === 'dateFrom') {
+            const dateTo = document.getElementById('dateTo');
+            if (dateTo) {
+                dateTo.min = e.target.value;
             }
         }
     });
-}
-
-// --- UTILS ---
-function setText(id, val) {
-    const el = document.getElementById(id);
-    if(el) el.innerText = val;
-}
-
-function initDateInputs() {
-    const now = new Date();
-    const prev = new Date(); prev.setDate(now.getDate() - 1);
     
-    // Format YYYY-MM-DD
-    const toDateVal = (d) => d.toISOString().split('T')[0];
+    // Enter key pada date picker
+    document.addEventListener('keypress', function(e) {
+        if ((e.target.id === 'dateFrom' || e.target.id === 'dateTo') && e.key === 'Enter') {
+            loadReportData();
+        }
+    });
     
-    document.getElementById('dateTo').value = toDateVal(now);
-    document.getElementById('dateFrom').value = toDateVal(prev);
+    // Export buttons
+    document.getElementById('toggleExport')?.addEventListener('click', toggleExportOptions);
+    document.getElementById('printChart')?.addEventListener('click', printChart);
 }
 
 function updateDateFromHours(hours) {
     const now = new Date();
     const past = new Date(now.getTime() - (hours * 60 * 60 * 1000));
     
-    document.getElementById('dateTo').value = now.toISOString().split('T')[0];
-    document.getElementById('dateFrom').value = past.toISOString().split('T')[0];
+    const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+    
+    const dateFrom = document.getElementById('dateFrom');
+    const dateTo = document.getElementById('dateTo');
+    
+    if (dateFrom) dateFrom.value = formatDate(past);
+    if (dateTo) dateTo.value = formatDate(now);
+    
+    // Update constraints
+    if (dateFrom && dateTo) {
+        dateTo.min = dateFrom.value;
+    }
 }
+
+// --- 6. DATA FETCHING ---
+async function loadReportData() {
+    console.log('Loading report data...');
+    
+    // Show loading state
+    const loadingEl = document.getElementById('sensorsLoading');
+    const containerEl = document.getElementById('sensorsContainer');
+    
+    if (loadingEl) {
+        loadingEl.style.display = 'block';
+        loadingEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading sensor data...';
+    }
+    
+    if (containerEl) {
+        containerEl.style.display = 'none';
+    }
+    
+    try {
+        // Get date values
+        const dateFrom = document.getElementById('dateFrom');
+        const dateTo = document.getElementById('dateTo');
+        
+        let url = `${API_URL}?limit=5000`;
+        
+        // Build URL with date parameters
+        if (dateFrom && dateTo && dateFrom.value && dateTo.value) {
+            const startDate = new Date(dateFrom.value);
+            startDate.setHours(0, 0, 0, 0);
+            
+            const endDate = new Date(dateTo.value);
+            endDate.setHours(23, 59, 59, 999);
+            
+            // Validate date range
+            if (endDate < startDate) {
+                showError('End date must be after start date');
+                return;
+            }
+            
+            url += `&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
+            console.log('Fetching with dates:', startDate.toISOString(), 'to', endDate.toISOString());
+        } else {
+            // Default to last 24 hours
+            url += '&hours=24';
+            console.log('Fetching last 24 hours');
+        }
+        
+        // Fetch data
+        console.log('Fetching from:', url);
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            currentData = result.data;
+            
+            if (currentData.length > 0) {
+                updateOverview(currentData);
+                renderSensorCards(currentData);
+                renderChart(currentData);
+                updateChartTitle(dateFrom?.value, dateTo?.value);
+            } else {
+                showNoDataMessage();
+            }
+        } else {
+            throw new Error(result.error || 'No data received');
+        }
+        
+    } catch (error) {
+        console.error('Error loading data:', error);
+        showError(error.message);
+    } finally {
+        // Hide loading
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+        }
+        
+        // Show container
+        if (containerEl) {
+            containerEl.style.display = 'grid';
+        }
+    }
+}
+
+// --- 7. CHART FUNCTIONS (IMPROVED) ---
+function renderChart(data) {
+    console.log('Rendering chart with', data.length, 'data points');
+    
+    // Destroy old chart
+    destroyChart();
+    
+    const canvas = document.getElementById('mainChart');
+    if (!canvas) {
+        console.error('Chart canvas not found');
+        return;
+    }
+    
+    if (!data || data.length === 0) {
+        // Show placeholder
+        const chartContainer = document.querySelector('#chartContainer .chart-content');
+        if (chartContainer) {
+            chartContainer.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 400px; color: #6b7280;">
+                    <div style="text-align: center;">
+                        <i class="fas fa-chart-line fa-2x" style="margin-bottom: 15px; opacity: 0.3;"></i>
+                        <p>No chart data available for selected period</p>
+                    </div>
+                </div>
+            `;
+        }
+        return;
+    }
+    
+    try {
+        // Prepare chart data
+        const { labels, datasets, timeRange } = prepareChartData(data);
+        
+        // Create chart
+        const ctx = canvas.getContext('2d');
+        
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: getChartOptions(timeRange)
+        });
+        
+        console.log('Chart rendered successfully');
+        
+    } catch (error) {
+        console.error('Error creating chart:', error);
+        // Show error but don't block the rest of the page
+        const chartContainer = document.querySelector('#chartContainer .chart-content');
+        if (chartContainer) {
+            chartContainer.innerHTML += `
+                <div style="color: #f97316; padding: 10px; background: #fffbeb; border-radius: 4px; margin-top: 10px; font-size: 12px;">
+                    <i class="fas fa-exclamation-triangle"></i> Chart error: ${error.message}
+                </div>
+            `;
+        }
+    }
+}
+
+function prepareChartData(data) {
+    // Sort data by timestamp
+    const sortedData = [...data].sort((a, b) => 
+        new Date(a.timestamp) - new Date(b.timestamp)
+    );
+    
+    // Calculate time range for scaling
+    const timestamps = sortedData.map(d => new Date(d.timestamp));
+    const minTime = new Date(Math.min(...timestamps));
+    const maxTime = new Date(Math.max(...timestamps));
+    const timeRange = maxTime - minTime;
+    
+    // Downsample based on time range
+    let displayData = sortedData;
+    const dataPoints = sortedData.length;
+    
+    // Adjust sampling based on time range
+    let sampleFactor = 1;
+    if (timeRange > 7 * 24 * 60 * 60 * 1000) { // > 1 week
+        sampleFactor = Math.ceil(dataPoints / 500);
+    } else if (timeRange > 24 * 60 * 60 * 1000) { // > 1 day
+        sampleFactor = Math.ceil(dataPoints / 1000);
+    } else {
+        sampleFactor = Math.ceil(dataPoints / 2000);
+    }
+    
+    if (sampleFactor > 1) {
+        displayData = sortedData.filter((_, index) => index % sampleFactor === 0);
+    }
+    
+    // Prepare datasets based on selected sensors
+    const datasets = selectedSensors
+        .filter(sensorKey => SENSORS[sensorKey])
+        .map((sensorKey, index) => {
+            const config = SENSORS[sensorKey];
+            const values = displayData.map(d => d[sensorKey] || 0);
+            
+            return {
+                label: config.name,
+                data: values,
+                borderColor: config.color,
+                backgroundColor: hexToRgba(config.color, 0.1),
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: index === 0, // Only fill first dataset
+                tension: 0.2,
+                yAxisID: `y${index === 0 ? '' : index + 1}`
+            };
+        });
+    
+    // If no sensors selected, show RPM by default
+    if (datasets.length === 0) {
+        const config = SENSORS.rpm;
+        datasets.push({
+            label: config.name,
+            data: displayData.map(d => d.rpm || 0),
+            borderColor: config.color,
+            backgroundColor: hexToRgba(config.color, 0.1),
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.2,
+            yAxisID: 'y'
+        });
+    }
+    
+    return {
+        labels: displayData.map(d => d.timestamp),
+        datasets: datasets,
+        timeRange: timeRange
+    };
+}
+
+function getChartOptions(timeRange) {
+    // Determine time unit based on time range
+    let timeUnit = 'hour';
+    let timeFormat = 'MMM d, HH:mm';
+    
+    if (timeRange > 30 * 24 * 60 * 60 * 1000) { // > 30 days
+        timeUnit = 'day';
+        timeFormat = 'MMM d';
+    } else if (timeRange > 7 * 24 * 60 * 60 * 1000) { // > 7 days
+        timeUnit = 'day';
+        timeFormat = 'MMM d';
+    } else if (timeRange > 24 * 60 * 60 * 1000) { // > 1 day
+        timeUnit = 'hour';
+        timeFormat = 'MMM d, HH:mm';
+    } else {
+        timeUnit = 'hour';
+        timeFormat = 'HH:mm';
+    }
+    
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+            mode: 'index',
+            intersect: false
+        },
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: {
+                    usePointStyle: true,
+                    padding: 20,
+                    font: {
+                        size: 12
+                    }
+                }
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                    title: function(tooltipItems) {
+                        if (tooltipItems.length > 0) {
+                            const date = new Date(tooltipItems[0].label);
+                            return date.toLocaleString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        }
+                        return '';
+                    },
+                    label: function(context) {
+                        let label = context.dataset.label || '';
+                        if (label) {
+                            label += ': ';
+                        }
+                        const value = context.parsed.y;
+                        const sensorKey = selectedSensors[context.datasetIndex] || 'rpm';
+                        const unit = SENSORS[sensorKey]?.unit || '';
+                        label += value.toFixed(1) + ' ' + unit;
+                        return label;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                type: 'time',
+                time: {
+                    unit: timeUnit,
+                    displayFormats: {
+                        millisecond: 'HH:mm:ss',
+                        second: 'HH:mm:ss',
+                        minute: 'HH:mm',
+                        hour: timeFormat,
+                        day: 'MMM d'
+                    }
+                },
+                grid: {
+                    display: false
+                },
+                ticks: {
+                    maxRotation: 45,
+                    minRotation: 45,
+                    autoSkip: true,
+                    maxTicksLimit: 12
+                },
+                title: {
+                    display: true,
+                    text: 'Time',
+                    font: {
+                        size: 12,
+                        weight: 'bold'
+                    }
+                }
+            },
+            y: {
+                type: 'linear',
+                display: true,
+                position: 'left',
+                title: {
+                    display: true,
+                    text: getYAxisTitle(0),
+                    font: {
+                        size: 12,
+                        weight: 'bold'
+                    }
+                },
+                beginAtZero: false, // Don't force zero for better scaling
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.05)'
+                },
+                ticks: {
+                    callback: function(value) {
+                        // Format numbers with appropriate precision
+                        if (value >= 1000) {
+                            return (value / 1000).toFixed(0) + 'k';
+                        }
+                        return value.toFixed(0);
+                    }
+                }
+            }
+        },
+        animation: {
+            duration: 750,
+            easing: 'easeInOutQuart'
+        }
+    };
+}
+
+function getYAxisTitle(datasetIndex) {
+    if (selectedSensors[datasetIndex]) {
+        const sensor = SENSORS[selectedSensors[datasetIndex]];
+        return `${sensor.name} (${sensor.unit})`;
+    }
+    return 'Value';
+}
+
+function updateChartTitle(startDate, endDate) {
+    const chartTitle = document.getElementById('chartTitle') || document.querySelector('.chart-title');
+    if (chartTitle) {
+        if (startDate && endDate) {
+            const start = new Date(startDate).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+            });
+            const end = new Date(endDate).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            chartTitle.textContent = `Sensor Trends (${start} - ${end})`;
+        } else {
+            chartTitle.textContent = 'Sensor Trends (Last 24 Hours)';
+        }
+    }
+}
+
+// --- 8. HELPER FUNCTIONS ---
+function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function showError(message) {
+    const containerEl = document.getElementById('sensorsContainer');
+    if (containerEl) {
+        containerEl.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
+                <div style="color: #ef4444; font-size: 48px; margin-bottom: 20px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <h3 style="margin-bottom: 10px; color: #dc2626;">Error Loading Data</h3>
+                <p style="margin-bottom: 20px; color: #6b7280;">${message}</p>
+                <button onclick="loadReportData()" 
+                        style="padding: 10px 24px; background: #1745a5; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    <i class="fas fa-redo"></i> Try Again
+                </button>
+            </div>
+        `;
+        containerEl.style.display = 'block';
+    }
+}
+
+function showNoDataMessage() {
+    const containerEl = document.getElementById('sensorsContainer');
+    if (containerEl) {
+        containerEl.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
+                <div style="color: #9ca3af; font-size: 48px; margin-bottom: 20px;">
+                    <i class="fas fa-database"></i>
+                </div>
+                <h3 style="margin-bottom: 10px; color: #4b5563;">No Data Available</h3>
+                <p style="margin-bottom: 30px; color: #6b7280;">
+                    No sensor data found for the selected time period.
+                </p>
+                <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                    <button onclick="updateDateFromHours('24'); loadReportData();" 
+                            class="time-btn active">
+                        Last 24 Hours
+                    </button>
+                    <button onclick="updateDateFromHours('168'); loadReportData();" 
+                            class="time-btn">
+                        Last 7 Days
+                    </button>
+                </div>
+            </div>
+        `;
+        containerEl.style.display = 'block';
+    }
+    
+    // Reset overview
+    setText('dailyAverage', '-- hrs');
+    setText('totalHours', '-- hrs');
+    setText('daysActive', '-- days');
+    setText('longestSession', '-- hrs');
+}
+
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+}
+
+// --- 9. OVERVIEW CALCULATIONS ---
+function updateOverview(data) {
+    if (!data || data.length === 0) {
+        setText('dailyAverage', '-- hrs');
+        setText('totalHours', '-- hrs');
+        setText('daysActive', '-- days');
+        setText('longestSession', '-- hrs');
+        return;
+    }
+    
+    try {
+        // Active records (RPM > 100)
+        const activeRecords = data.filter(d => d.rpm > 100);
+        const totalHours = (activeRecords.length * 2) / 3600;
+        
+        // Unique active days
+        const daysSet = new Set();
+        activeRecords.forEach(d => {
+            const dateStr = new Date(d.timestamp).toDateString();
+            daysSet.add(dateStr);
+        });
+        
+        const avgDaily = daysSet.size > 0 ? (totalHours / daysSet.size) : 0;
+        
+        // Longest session
+        let maxSession = 0, currSession = 0;
+        const sorted = [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        for (let i = 1; i < sorted.length; i++) {
+            if (sorted[i].rpm > 100) {
+                const diff = (new Date(sorted[i].timestamp) - new Date(sorted[i-1].timestamp)) / 1000;
+                if (diff < 300) {
+                    currSession += diff;
+                } else {
+                    maxSession = Math.max(maxSession, currSession);
+                    currSession = 0;
+                }
+            }
+        }
+        maxSession = Math.max(maxSession, currSession);
+        
+        setText('dailyAverage', `${avgDaily.toFixed(1)} hrs`);
+        setText('totalHours', `${totalHours.toFixed(1)} hrs`);
+        setText('daysActive', `${daysSet.size} days`);
+        setText('longestSession', `${(maxSession/3600).toFixed(1)} hrs`);
+        
+    } catch (error) {
+        console.error('Error in updateOverview:', error);
+    }
+}
+
+// --- 10. RENDER SENSOR CARDS ---
+function renderSensorCards(data) {
+    const container = document.getElementById('sensorsContainer');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (!data || data.length === 0) {
+        showNoDataMessage();
+        return;
+    }
+    
+    const latest = data[0] || {};
+    
+    Object.entries(SENSORS).forEach(([key, config]) => {
+        const values = data.map(d => d[key]).filter(v => v != null && !isNaN(v));
+        
+        if (values.length === 0) return;
+        
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        const current = latest[key] != null ? latest[key] : avg;
+        
+        // Determine status
+        let status = 'normal';
+        let statusClass = 'status-normal';
+        
+        if (key === 'temp' && current > 90) {
+            status = 'critical';
+            statusClass = 'status-critical';
+        } else if (key === 'volt' && (current < 11 || current > 15)) {
+            status = 'warning';
+            statusClass = 'status-warning';
+        } else if (key === 'fuel' && current < 20) {
+            status = 'warning';
+            statusClass = 'status-warning';
+        }
+        
+        const card = document.createElement('div');
+        card.className = 'sensor-card';
+        card.style.borderLeftColor = config.color;
+        
+        card.innerHTML = `
+            <div class="sensor-header">
+                <div class="sensor-name">
+                    <div class="sensor-icon" style="background: ${config.color}20; color: ${config.color}">
+                        <i class="${config.icon}"></i>
+                    </div>
+                    <span>${config.name}</span>
+                </div>
+                <div class="sensor-status ${statusClass}">${status.toUpperCase()}</div>
+            </div>
+            
+            <div class="sensor-stats">
+                <div class="stat-item">
+                    <div class="stat-label">CURRENT</div>
+                    <div class="stat-value" style="color: ${config.color};">
+                        ${current.toFixed(1)}<small style="font-size: 12px;"> ${config.unit}</small>
+                    </div>
+                </div>
+                
+                <div class="stat-item">
+                    <div class="stat-label">AVERAGE</div>
+                    <div class="stat-value">${avg.toFixed(1)} ${config.unit}</div>
+                </div>
+                
+                <div class="stat-item">
+                    <div class="stat-label">MIN</div>
+                    <div class="stat-value">${min.toFixed(1)} ${config.unit}</div>
+                </div>
+                
+                <div class="stat-item">
+                    <div class="stat-label">MAX</div>
+                    <div class="stat-value">${max.toFixed(1)} ${config.unit}</div>
+                </div>
+            </div>
+            
+            <div class="sensor-footer">
+                <div class="warning-indicator ${min === 0 ? 'warning-nonzero' : 'warning-zero'}">
+                    <i class="fas fa-${min === 0 ? 'exclamation-triangle' : 'check-circle'}"></i>
+                    ${values.length} readings
+                </div>
+                <div class="last-updated">
+                    Updated: ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(card);
+    });
+    
+    container.style.display = 'grid';
+}
+
+// --- 11. EXPORT FUNCTIONS ---
+function toggleExportOptions() {
+    const exportOptions = document.getElementById('exportOptions');
+    if (exportOptions) {
+        exportOptions.style.display = exportOptions.style.display === 'block' ? 'none' : 'block';
+    }
+}
+
+function printChart() {
+    if (!myChart) {
+        alert('No chart data available to print');
+        return;
+    }
+    
+    const printWindow = window.open('', '_blank');
+    const chartImage = document.getElementById('mainChart').toDataURL('image/png');
+    const dateFrom = document.getElementById('dateFrom')?.value || 'N/A';
+    const dateTo = document.getElementById('dateTo')?.value || 'N/A';
+    
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>Gen-Track - Engine Report</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 40px; }
+                    .print-header { text-align: center; margin-bottom: 30px; }
+                    .chart-container { max-width: 800px; margin: 0 auto; }
+                    img { max-width: 100%; height: auto; }
+                </style>
+            </head>
+            <body>
+                <div class="print-header">
+                    <h1>Engine Data Report</h1>
+                    <p>Period: ${dateFrom} to ${dateTo}</p>
+                    <p>Generated: ${new Date().toLocaleString()}</p>
+                </div>
+                <div class="chart-container">
+                    <img src="${chartImage}" alt="Chart">
+                </div>
+                <script>
+                    setTimeout(() => {
+                        window.print();
+                        window.close();
+                    }, 500);
+                </script>
+            </body>
+        </html>
+    `);
+    printWindow.document.close();
+}
+
+// --- 12. GLOBAL FUNCTIONS ---
+window.loadReportData = loadReportData;
+window.updateDateFromHours = updateDateFromHours;

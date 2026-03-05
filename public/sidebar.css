@@ -1,3 +1,29 @@
+/* public/sidebar.css */
+
+.sidebar-menu {
+    list-style: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Memastikan icon di tengah secara horizontal */
+}
+
+.sidebar-menu li {
+    width: 100%;
+    display: flex;
+    justify-content: center; /* Memastikan link/icon di tengah */
+}
+
+.sidebar-menu a {
+    /* Style link yang sudah ada */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    /* ... style lain ... */
+}
+
 /* sidebar.css */
 :root {
     --primary: #1745a5;
@@ -114,4 +140,48 @@
     .sidebar:hover ~ .main-content {
         margin-left: 220px;
     }
+}
+
+/* --- PAKSA TAMPILAN SIDEBAR AGAR KONSISTEN --- */
+
+/* 1. Reset Container Utama List */
+#sidebar-container ul,
+#sidebar ul {
+    padding-left: 0 !important; /* Hapus padding bawaan browser/engine.css */
+    margin: 0 !important;
+    list-style: none !important; /* Hapus bullet points */
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important; /* Pastikan item di tengah secara horizontal */
+    width: 100% !important;
+}
+
+/* 2. Reset List Item */
+#sidebar-container li,
+#sidebar li {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    justify-content: center !important; /* Dorong konten (link) ke tengah */
+}
+
+/* 3. Reset Link/Anchor (Ikon) */
+#sidebar-container li a,
+#sidebar a {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important; /* Ikon dan teks pas di tengah */
+    width: 100% !important;
+    padding: 15px 0 !important; /* Beri jarak atas-bawah yang seragam */
+    text-decoration: none !important;
+    text-align: center !important;
+}
+
+/* 4. Pastikan Ikon tidak bergeser */
+#sidebar-container i,
+#sidebar i {
+    margin: 0 !important; /* Hapus margin aneh pada ikon */
+    min-width: 24px; /* Lebar minimum ikon stabil */
+    text-align: center;
 }

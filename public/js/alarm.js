@@ -10,14 +10,7 @@ fetch('sidebar.html')
   .then(h => document.getElementById('sidebar-container').innerHTML = h)
   .catch(() => console.error('Sidebar not found'));
 
-// Digital Clock
-function updateClock() {
-  const now = new Date();
-  document.getElementById('clock').innerText = 
-    now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-}
-setInterval(updateClock, 1000);
-updateClock();
+// JAM DIGITAL DIHAPUS DARI SINI
 
 // --- ALARM LOGIC & API ---
 
@@ -104,7 +97,7 @@ function renderTable() {
 
     if (alarm.resolved) {
       // Jika sudah di-ack (Resolved)
-      statusHtml = `<span class="st-acknowledged"><i class="fas fa-check-circle"></i> ACKNOWLEDGED</span>`;
+      statusHtml = `<span class="st-confirmed"><i class="fas fa-check-circle"></i> CONFIRMED</span>`;
       // Tampilkan tombol Hapus
       actionButtons = `
         <button class="btn btn-del" onclick="removeAlarm('${alarm._id}')">
@@ -117,7 +110,7 @@ function renderTable() {
       // Tampilkan HANYA tombol Acknowledge
       actionButtons = `
         <button class="btn btn-ack" onclick="acknowledgeAlarm('${alarm._id}')">
-          <i class="fas fa-check"></i> Acknowledge
+          <i class="fas fa-check"></i> Confirm
         </button>
       `;
     }

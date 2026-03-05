@@ -60,8 +60,9 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:
 
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-th { background: #f7fbff; font-weight: 700; color: var(--primary); font-size: 14px; position: sticky; top: 0; }
+th, { background: #f7fbff; font-weight: 700; color: var(--primary); font-size: 14px; position: sticky; top: 0; }
 tr:hover { background: #f8fafc; }
+tr, td { font-size: 14px; color: #000000; }
 
 .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
 .status-normal { background: #d1fae5; color: #065f46; }

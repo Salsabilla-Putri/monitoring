@@ -85,7 +85,7 @@ async function loadThresholdsFromDB() {
 }
 
 // --- MQTT LOGIC ---
-const mqttClient = mqtt.connect(process.env.MQTT_BROKER || 'mqtt://10.136.18.227:1883', {
+const mqttClient = mqtt.connect(process.env.MQTT_BROKER || 'mqtt://10.157.223.227:1883', {
     username: process.env.MQTT_USERNAME || '/TA20:TA20',
     password: process.env.MQTT_PASSWORD || 'TA242501020'
 });
@@ -489,7 +489,8 @@ app.get('/api/reports', async (req, res) => {
 
 app.get('/api/health', (req, res) => res.json({ status: 'healthy', mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' }));
 app.get('/favicon.ico', (req, res) => res.status(204).end());
-app.get(/(.*)/, (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
+
+app.get(/(.*)/, (req, res) => { res.sendFile(path.join(__dirname, 'public', 'login.html')); });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

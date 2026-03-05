@@ -9,6 +9,14 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:
 
 .container { display: flex; min-height: 100vh; }
 
+.sidebar:hover ~ .topbar { left: 220px; }
+.topbar-title { font-size: 20px; font-weight: bold; color: var(--primary); }
+.topbar-user { 
+    background: #183153; color: white; padding: 8px 16px; 
+    border-radius: 20px; font-size: 14px; cursor: pointer; 
+    display: flex; align-items: center; gap: 8px; 
+}
+
 /* LAYOUT */
 .main-content { flex: 1; margin-left: 80px; padding: 20px; padding-top: 80px; transition: margin-left 0.3s ease; }
 #sidebar-container:hover ~ .main-content { margin-left: 220px; }
