@@ -1,30 +1,6 @@
 /* public/sidebar.css */
+/* FIXED VERSION - Logo tetap centered, smooth transitions, no glitch */
 
-.sidebar-menu {
-    list-style: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    display: flex;
-    flex-direction: column;
-    align-items: center; /* Memastikan icon di tengah secara horizontal */
-}
-
-.sidebar-menu li {
-    width: 100%;
-    display: flex;
-    justify-content: center; /* Memastikan link/icon di tengah */
-}
-
-.sidebar-menu a {
-    /* Style link yang sudah ada */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    /* ... style lain ... */
-}
-
-/* sidebar.css */
 :root {
     --primary: #1745a5;
     --primary-light: #3b6bdf;
@@ -39,13 +15,13 @@
     --accent: #1745a5;
 }
 
-/* Sidebar Styles */
+/* Sidebar Container */
 .sidebar {
     width: 80px;
     background: #183153;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: center; /* Tetap center untuk logo */
     padding-top: 20px;
     position: fixed;
     height: 100vh;
@@ -53,89 +29,116 @@
     box-shadow: 3px 0 15px rgba(0, 0, 0, 0.1);
     z-index: 100;
     transition: width 0.3s ease;
+    left: 0;
+    top: 0;
 }
 
 .sidebar:hover {
     width: 220px;
 }
 
+/* Logo - Selalu centered */
 .logo {
     width: 50px;
-    margin-bottom: 30px;
+    margin: 0 auto 30px auto; /* Force center dengan auto margin */
     background: white;
     border-radius: 10px;
-}
-.menu-item.logout a {
-  color: #ff4444;
-  font-weight: 600;
+    display: block;
+    transition: none; /* Tidak ada transition untuk logo */
 }
 
-.menu-item.logout a:hover {
-  background: #ffdddd;
+/* Navigation Items Container */
+.nav-items-wrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Default: center */
+    transition: align-items 0.3s ease;
 }
 
+.sidebar:hover .nav-items-wrapper {
+    align-items: flex-start; /* Saat hover: align left */
+}
 
+/* Navigation Items */
 .nav-item {
     display: flex;
     align-items: center;
-    justify-content: center;
     color: white;
     text-decoration: none;
-    padding: 12px 15px;
-    margin: 4px 0;
+    padding: 14px;
+    margin: 4px 8px;
     border-radius: 8px;
-    width: 90%;
+    width: calc(100% - 16px);
     font-size: 14px;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
     white-space: nowrap;
     overflow: hidden;
+    position: relative;
 }
 
-.sidebar:hover .nav-item {
-    justify-content: flex-start;
-}
-
-.nav-item:hover, .nav-item.active {
+.nav-item:hover, 
+.nav-item.active {
     background: var(--primary-light);
-    transform: translateX(5px);
+    transform: translateX(3px);
 }
 
+/* Icon Wrapper */
 .nav-icon {
-    font-size: 20px;
-    margin-right: 15px;
-    min-width: 24px;
+    font-size: 22px;
+    min-width: 22px;
     text-align: center;
+    flex-shrink: 0;
+    transition: margin-right 0.3s ease;
 }
 
+.sidebar:hover .nav-icon {
+    margin-right: 15px;
+}
+
+/* Text Label */
 .nav-text {
     opacity: 0;
-    transition: opacity 0.3s;
+    font-size: 15px;
+    font-weight: 500;
+    transition: opacity 0.3s ease;
 }
 
 .sidebar:hover .nav-text {
     opacity: 1;
 }
 
-/* Main Content Styles */
+/* Main Content - SMOOTH TRANSITION */
 .main-content {
     flex: 1;
     margin-left: 80px;
     padding: 20px;
-    transition: margin-left 0.3s ease;
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* Smooth easing */
+    will-change: margin-left; /* Optimize animation */
 }
 
 .sidebar:hover ~ .main-content {
     margin-left: 220px;
 }
 
-/* Responsive adjustments */
+/* Logout Item Styling */
+#logout-btn {
+    color: #ff4444;
+    font-weight: 600;
+}
+
+#logout-btn:hover {
+    background: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
     .sidebar {
         width: 60px;
     }
     
     .sidebar:hover {
-        width: 220px;
+        width: 200px;
     }
     
     .main-content {
@@ -143,50 +146,69 @@
     }
     
     .sidebar:hover ~ .main-content {
-        margin-left: 220px;
+        margin-left: 200px;
+    }
+    
+    .nav-icon {
+        font-size: 20px;
+    }
+    
+    .nav-item {
+        padding: 12px;
     }
 }
 
-/* --- PAKSA TAMPILAN SIDEBAR AGAR KONSISTEN --- */
-
-/* 1. Reset Container Utama List */
-#sidebar-container ul,
-#sidebar ul {
-    padding-left: 0 !important; /* Hapus padding bawaan browser/engine.css */
-    margin: 0 !important;
-    list-style: none !important; /* Hapus bullet points */
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important; /* Pastikan item di tengah secara horizontal */
-    width: 100% !important;
-}
-
-/* 2. Reset List Item */
-#sidebar-container li,
-#sidebar li {
-    width: 100% !important;
-    margin: 0 !important;
+/* Reset & Override untuk konsistensi */
+#sidebar-container {
+    position: relative;
     padding: 0 !important;
-    display: flex !important;
-    justify-content: center !important; /* Dorong konten (link) ke tengah */
+    margin: 0 !important;
 }
 
-/* 3. Reset Link/Anchor (Ikon) */
-#sidebar-container li a,
-#sidebar a {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important; /* Ikon dan teks pas di tengah */
+.sidebar ul,
+.sidebar li {
+    padding: 0 !important;
+    margin: 0 !important;
+    list-style: none !important;
+}
+
+.sidebar li {
     width: 100% !important;
-    padding: 15px 0 !important; /* Beri jarak atas-bawah yang seragam */
-    text-decoration: none !important;
-    text-align: center !important;
 }
 
-/* 4. Pastikan Ikon tidak bergeser */
-#sidebar-container i,
-#sidebar i {
-    margin: 0 !important; /* Hapus margin aneh pada ikon */
-    min-width: 24px; /* Lebar minimum ikon stabil */
-    text-align: center;
+/* Scrollbar */
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* FIX UNTUK ENGINE PAGE - Prevent layout shift */
+body {
+    overflow-x: hidden; /* Prevent horizontal scroll during transition */
+}
+
+/* Ensure topbar doesn't jump */
+.topbar {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Container untuk mencegah layout shift */
+.engine-page-container,
+.dashboard-container,
+.maintenance-page-container,
+.reports-page-container,
+.history-container {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
