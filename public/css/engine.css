@@ -11,7 +11,7 @@
 
 body { 
     margin: 0; 
-    font-family: Inter, system-ui, -apple-system, sans-serif; 
+    font-family: var(--app-font-family); 
     background: #f1f5f9; 
     color: #0f172a; 
 }
@@ -27,7 +27,7 @@ body {
     transition: margin-left 0.3s ease; 
 }
 
-.sidebar:hover ~ .main-content { margin-left: 220px; }
+.sidebar:hover ~ .main-content, body.sidebar-expanded .main-content { margin-left: 220px; }
 
 /* === TOPBAR (Specific overrides if needed) === */
 .topbar { 
@@ -36,11 +36,11 @@ body {
     display: flex; align-items: center; justify-content: space-between; 
     padding: 0 24px; z-index: 20; transition: left 0.3s ease; 
 }
-.sidebar:hover ~ .topbar { left: 220px; }
-.topbar-title { font-size: 20px; font-weight: bold; color: var(--primary); }
+.sidebar:hover ~ .topbar, body.sidebar-expanded .topbar { left: 220px; }
+.topbar-title { font-size: var(--heading-page-size); font-weight: 700; color: var(--primary); }
 .topbar-user { 
     background: #183153; color: white; padding: 8px 16px; 
-    border-radius: 20px; font-size: 14px; cursor: pointer; 
+    border-radius: 20px; font-size: var(--text-base-size); cursor: pointer; 
     display: flex; align-items: center; gap: 8px; 
 }
 
@@ -61,7 +61,7 @@ body {
     transition: box-shadow .18s, border .18s; 
     border: 1px solid transparent; 
 }
-.param-box h4 { margin: 6px 0 8px 0; color: var(--accent); font-size: 14px; font-weight: 700; }
+.param-box h4 { margin: 6px 0 8px 0; color: var(--accent); font-size: var(--text-base-size); font-weight: 700; }
 .param-val { font-size: 1.6em; font-weight: 800; margin-bottom: 8px; color: #0f172a; }
 .param-val.numeric { font-size: 2.1em; }
 
@@ -108,11 +108,11 @@ body {
 
 /* === BUTTONS & BADGES === */
 .thr-btn { 
-    margin-top: 8px; padding: 7px 10px; font-size: 13px; 
+    margin-top: 8px; padding: 7px 10px; font-size: var(--text-sm-size); 
     border: none; background: var(--accent); color: white; 
     border-radius: 7px; cursor: pointer; 
 }
-.thr-badge { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.thr-badge { font-size: var(--text-xs-size); color: var(--muted); margin-top: 8px; }
 
 /* === INDICATORS === */
 .indicator { display: inline-block; padding: 6px 10px; border-radius: 8px; font-weight: 700; }
@@ -127,7 +127,7 @@ body {
 }
 table.alert-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
 table.alert-table th, table.alert-table td { 
-    text-align: left; padding: 8px; border-bottom: 1px solid #eef4fb; font-size: 13px; 
+    text-align: left; padding: 8px; border-bottom: 1px solid #eef4fb; font-size: var(--text-sm-size); 
 }
 table.alert-table th { background: #f7fbff; font-weight: 700; color: #123; }
 
@@ -150,7 +150,7 @@ table.alert-table th { background: #f7fbff; font-weight: 700; color: #123; }
     border-radius: 10px; box-shadow: 0 8px 36px rgba(2,6,23,0.18); 
 }
 .modal-row { margin-bottom: 10px; }
-.modal-row label { display: block; font-size: 13px; margin-bottom: 6px; color: #263238; }
+.modal-row label { display: block; font-size: var(--text-sm-size); margin-bottom: 6px; color: #263238; }
 .modal-row input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #e6eef8; }
 .modal-footer { display: flex; gap: 8px; margin-top: 8px; }
 
