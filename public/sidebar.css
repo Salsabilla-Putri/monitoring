@@ -78,6 +78,7 @@
 .nav-item {
     display: flex;
     align-items: center;
+    justify-content: center;
     color: white;
     text-decoration: none;
     padding: 12px 15px;
@@ -88,6 +89,10 @@
     transition: all 0.3s;
     white-space: nowrap;
     overflow: hidden;
+}
+
+.sidebar:hover .nav-item {
+    justify-content: flex-start;
 }
 
 .nav-item:hover, .nav-item.active {
