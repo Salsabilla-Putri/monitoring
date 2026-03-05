@@ -1,0 +1,77 @@
+:root {
+  --app-font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --text-base-size: 14px;
+  --text-sm-size: 13px;
+  --text-lg-size: 16px;
+  --heading-page-size: 24px;
+  --heading-section-size: 18px;
+}
+
+html {
+  font-size: var(--text-base-size);
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--app-font-family);
+  line-height: 1.45;
+}
+
+h1,
+.topbar-title,
+.header h1,
+.hero-greeting {
+  font-size: var(--heading-page-size);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+h2,
+h3,
+.section-title,
+.card-header h3,
+.param-box h4 {
+  font-size: var(--heading-section-size);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+p,
+span,
+td,
+th,
+label,
+.nav-item,
+.user-info,
+.filter-tab,
+.btn,
+.time-btn,
+.form-control {
+  font-size: var(--text-base-size);
+}
+
+small,
+.stat-label,
+.last-updated,
+.logo-subtext,
+.sensor-status {
+  font-size: var(--text-sm-size);
+}
+
+.overview-value,
+.stat-number,
+.param-val,
+.hero-time {
+  font-size: clamp(1.5rem, 2vw, 2rem);
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --heading-page-size: 20px;
+    --heading-section-size: 16px;
+  }
+}
