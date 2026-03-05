@@ -18,7 +18,8 @@
 }
 
 /* Efek saat Sidebar di-hover */
-#sidebar-container:hover ~ .topbar {
+#sidebar-container:hover ~ .topbar,
+body.sidebar-expanded .topbar {
     left: 220px;
 }
 
