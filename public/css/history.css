@@ -7,7 +7,7 @@
     --border: #e2e8f0;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:#f1f5f9; color:#0f172a; overflow-x:hidden; }
+body { font-family: var(--app-font-family); background:#f1f5f9; color:#0f172a; overflow-x:hidden; }
 .container { display: flex; min-height: 100vh; }
 
 /* LAYOUT */
@@ -22,7 +22,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:
 .summary-card.parameters { border-left: 4px solid var(--secondary); }
 .summary-card.period { border-left: 4px solid var(--warning); }
 .summary-value { font-size: 28px; font-weight: 700; margin-bottom: 5px; }
-.summary-label { font-size: 14px; color: var(--muted); }
+.summary-label { font-size: var(--text-base-size); color: var(--muted); }
 
 /* FILTER SECTION */
 .filter-card {
@@ -31,11 +31,11 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:
 }
 
 .filter-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.filter-title { font-size: 18px; font-weight: 700; color: var(--primary); }
+.filter-title { font-size: var(--heading-section-size); font-weight: 700; color: var(--primary); }
 .filter-actions { display: flex; gap: 10px; }
 
 .btn {
-    padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;
+    padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: var(--text-base-size); font-weight: 600;
     display: flex; align-items: center; gap: 8px; transition: 0.2s;
 }
 .btn-outline { background: white; border: 1px solid var(--primary); color: var(--primary); }
@@ -46,25 +46,25 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background:
 /* Filter Inputs */
 .filter-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
 .form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-label { font-size: 14px; font-weight: 600; color: #334155; }
+.form-label { font-size: var(--text-base-size); font-weight: 600; color: #334155; }
 .form-input, .form-select {
     padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
-    font-size: 14px; color: #334155; width: 100%; outline: none; transition: 0.2s;
+    font-size: var(--text-base-size); color: #334155; width: 100%; outline: none; transition: 0.2s;
 }
 .form-input:focus, .form-select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(23, 69, 165, 0.1); }
 
 /* TABLE CARD */
 .history-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.card-title { font-size: 18px; font-weight: 700; color: #1e293b; } /* Ditambah styling title default */
+.card-title { font-size: var(--heading-section-size); font-weight: 700; color: #1e293b; } /* Ditambah styling title default */
 
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-th, { background: #f7fbff; font-weight: 700; color: var(--primary); font-size: 14px; position: sticky; top: 0; }
+th, { background: #f7fbff; font-weight: 700; color: var(--primary); font-size: var(--text-base-size); position: sticky; top: 0; }
 tr:hover { background: #f8fafc; }
-tr, td { font-size: 14px; color: #000000; }
+tr, td { font-size: var(--text-base-size); color: #000000; }
 
-.status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
+.status-badge { padding: 4px 10px; border-radius: 12px; font-size: var(--text-xs-size); font-weight: 600; text-transform: capitalize; }
 .status-normal { background: #d1fae5; color: #065f46; }
 .status-warning { background: #ffedd5; color: #9a3412; }
 .status-critical { background: #fee2e2; color: #991b1b; }
