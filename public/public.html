@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <title>Gen-Track — Informasi Publik</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="js/auth-guard.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/typography.css">
+  <link rel="stylesheet" href="css/public-view.css">
+</head>
+<body>
+  <main class="public-shell">
+    <header class="public-header">
+      <div>
+        <h1><i class="fas fa-bolt"></i> Informasi Status Generator</h1>
+        <p class="subtitle">Tampilan sederhana untuk masyarakat umum.</p>
+      </div>
+      <button id="logoutPublic" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Keluar</button>
+    </header>
+
+    <section class="status-hero" id="statusHero">
+      <div class="hero-title">Status Saat Ini</div>
+      <div class="hero-value" id="generatorState">Memuat data...</div>
+      <div class="hero-note" id="generatorNote">Mohon tunggu pembaruan data.</div>
+    </section>
+
+    <section class="info-grid">
+      <article class="info-card">
+        <h2><i class="fas fa-plug"></i> Kondisi Listrik</h2>
+        <p class="value" id="electricStatus">--</p>
+        <p class="desc">Menunjukkan apakah listrik dari generator tersedia dengan stabil.</p>
+      </article>
+
+      <article class="info-card">
+        <h2><i class="fas fa-gas-pump"></i> Ketersediaan Bahan Bakar</h2>
+        <p class="value" id="fuelStatus">--</p>
+        <p class="desc">Bahan bakar cukup berarti generator dapat beroperasi lebih lama.</p>
+      </article>
+
+      <article class="info-card wide">
+        <h2><i class="fas fa-circle-info"></i> Catatan untuk Masyarakat</h2>
+        <p class="desc" id="publicMessage">Sistem sedang mengambil informasi terbaru dari mesin.</p>
+      </article>
+    </section>
+
+    <footer class="public-footer">
+      <span id="lastUpdate">Update terakhir: -</span>
+    </footer>
+  </main>
+
+  <script src="js/public-view.js"></script>
+</body>
+</html>
