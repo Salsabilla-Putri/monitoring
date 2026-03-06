@@ -32,7 +32,7 @@
 
     body {
       font-family: var(--app-font-family);
-      background: linear-gradient(135deg, #12357f 0%, #3b6bdf 55%, #6ea2ff 100%);
+      background: radial-gradient(circle at 12% 10%, #e8f0ff 0%, #f4f7fb 35%, #eef3fa 100%);
       color: #0f172a;
       min-height: 100vh;
       display: flex;
@@ -41,24 +41,55 @@
       padding: clamp(12px, 2vw, 24px);
     }
 
+    
+    body::before,
+    body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(2px);
+    }
+
+    body::before {
+      width: 320px;
+      height: 320px;
+      left: -120px;
+      top: -80px;
+      background: rgba(59, 107, 223, 0.12);
+    }
+
+    body::after {
+      width: 280px;
+      height: 280px;
+      right: -110px;
+      bottom: -90px;
+      background: rgba(16, 185, 129, 0.12);
+    }
+
     .login-container {
       width: min(960px, 100%);
       display: grid;
       grid-template-columns: 1.05fr 1fr;
       border-radius: 18px;
       overflow: hidden;
-      box-shadow: 0 24px 70px rgba(8, 23, 56, 0.28);
+      box-shadow: 0 20px 54px rgba(15, 23, 42, 0.16);
       background: #ffffff;
+      border: 1px solid #dce6f5;
+      position: relative;
+      z-index: 1;
     }
 
     .login-side {
-      background: linear-gradient(160deg, #11357f 0%, #1745a5 60%, #3b6bdf 100%);
+      background: linear-gradient(165deg, #0f2554 0%, #13387f 55%, #1a4aa8 100%);
       color: #fff;
       padding: 44px 36px;
       display: flex;
       flex-direction: column;
       justify-content: center;
       gap: 18px;
+      border-right: 1px solid rgba(255, 255, 255, 0.14);
     }
 
     .side-title {
@@ -151,7 +182,7 @@
     }
 
     .form-group {
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
     .form-label {
@@ -279,7 +310,7 @@
     .alert {
       padding: 12px 16px;
       border-radius: 8px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       font-size: 14px;
       display: none;
     }
@@ -315,6 +346,8 @@
 
       .login-side {
         padding: 26px 22px;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.16);
       }
 
       .side-title {
