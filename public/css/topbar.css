@@ -18,12 +18,13 @@
 }
 
 /* Efek saat Sidebar di-hover */
-#sidebar-container:hover ~ .topbar {
+#sidebar-container:hover ~ .topbar,
+body.sidebar-expanded .topbar {
     left: 220px;
 }
 
 .topbar-title {
-    font-size: 20px;
+    font-size: var(--heading-page-size);
     font-weight: 700;
     color: #1745a5;
     color: var(--primary, #1745a5);
@@ -37,7 +38,7 @@
     color: white;
     padding: 6px 16px;
     border-radius: 20px;
-    font-size: 14px;
+    font-size: var(--text-base-size);
     font-weight: 600;
     display: flex;
     align-items: center;
