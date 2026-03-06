@@ -112,3 +112,15 @@ document.getElementById('refreshPublic').addEventListener('click', loadPublicDat
 
 loadPublicData();
 setInterval(loadPublicData, 10000);
+
+
+const toggleSidebarBtn = document.getElementById('toggleSidebar');
+if (toggleSidebarBtn) {
+  toggleSidebarBtn.addEventListener('click', () => {
+    document.body.classList.toggle('sidebar-open');
+  });
+}
+
+document.querySelectorAll('.ps-nav a').forEach((a) => {
+  a.addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+});

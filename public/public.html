@@ -10,60 +10,80 @@
   <link rel="stylesheet" href="css/public-view.css">
 </head>
 <body>
-  <main class="public-shell">
-    <header class="public-header">
-      <div>
-        <h1><i class="fas fa-bolt"></i> Informasi Status Generator</h1>
-        <p class="subtitle">Tampilan sederhana untuk masyarakat umum.</p>
+  <div class="public-layout">
+    <aside class="public-sidebar" id="publicSidebar">
+      <div class="ps-brand">
+        <div class="ps-logo"><i class="fas fa-bolt"></i></div>
+        <div>
+          <div class="ps-title">Gen-Track</div>
+          <div class="ps-sub">Mode Masyarakat</div>
+        </div>
       </div>
-      <div class="header-actions">
-        <button id="refreshPublic" class="secondary-btn"><i class="fas fa-rotate"></i> Perbarui</button>
-        <button id="logoutPublic" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Keluar</button>
-      </div>
-    </header>
 
-    <section class="status-hero" id="statusHero">
-      <div class="hero-title">Status Saat Ini</div>
-      <div class="hero-value" id="generatorState">Memuat data...</div>
-      <div class="hero-note" id="generatorNote">Mohon tunggu pembaruan data.</div>
-    </section>
+      <nav class="ps-nav">
+        <a href="#statusHero"><i class="fas fa-house"></i> Ringkasan</a>
+        <a href="#quickStatus"><i class="fas fa-chart-simple"></i> Status Cepat</a>
+        <a href="#recommendation"><i class="fas fa-lightbulb"></i> Rekomendasi</a>
+      </nav>
 
-    <section class="quick-grid">
-      <article class="quick-card">
-        <h3><i class="fas fa-plug"></i> Kondisi Listrik</h3>
-        <p class="quick-value" id="electricStatus">--</p>
-      </article>
-      <article class="quick-card">
-        <h3><i class="fas fa-gears"></i> Kondisi Mesin Motor</h3>
-        <p class="quick-value" id="engineStatus">--</p>
-      </article>
-      <article class="quick-card">
-        <h3><i class="fas fa-gas-pump"></i> Bahan Bakar</h3>
-        <p class="quick-value" id="fuelStatus">--</p>
-      </article>
-      <article class="quick-card">
-        <h3><i class="fas fa-clock"></i> Estimasi Operasi</h3>
-        <p class="quick-value" id="runtimeEstimate">--</p>
-      </article>
-    </section>
+      <button id="logoutPublic" class="ps-logout"><i class="fas fa-sign-out-alt"></i> Keluar</button>
+    </aside>
 
-    <section class="info-grid">
-      <article class="info-card wide">
-        <h2><i class="fas fa-circle-info"></i> Catatan untuk Masyarakat</h2>
-        <p class="desc" id="publicMessage">Sistem sedang mengambil informasi terbaru dari mesin.</p>
-      </article>
-      <article class="info-card wide">
-        <h2><i class="fas fa-list-check"></i> Rekomendasi Tindakan</h2>
-        <ul class="tips-list" id="publicTips">
-          <li>Menunggu pembaruan data...</li>
-        </ul>
-      </article>
-    </section>
+    <main class="public-shell">
+      <header class="public-header">
+        <div>
+          <h1><i class="fas fa-bolt"></i> Informasi Status Generator</h1>
+          <p class="subtitle">Tampilan sederhana untuk masyarakat/rumah tangga.</p>
+        </div>
+        <div class="header-actions">
+          <button id="toggleSidebar" class="secondary-btn icon-only" aria-label="Buka sidebar"><i class="fas fa-bars"></i></button>
+          <button id="refreshPublic" class="secondary-btn"><i class="fas fa-rotate"></i> Perbarui</button>
+        </div>
+      </header>
 
-    <footer class="public-footer">
-      <span id="lastUpdate">Update terakhir: -</span>
-    </footer>
-  </main>
+      <section class="status-hero" id="statusHero">
+        <div class="hero-title">Status Saat Ini</div>
+        <div class="hero-value" id="generatorState">Memuat data...</div>
+        <div class="hero-note" id="generatorNote">Mohon tunggu pembaruan data.</div>
+      </section>
+
+      <section class="quick-grid" id="quickStatus">
+        <article class="quick-card">
+          <h3><i class="fas fa-plug"></i> Kondisi Listrik</h3>
+          <p class="quick-value" id="electricStatus">--</p>
+        </article>
+        <article class="quick-card">
+          <h3><i class="fas fa-gears"></i> Kondisi Mesin Motor</h3>
+          <p class="quick-value" id="engineStatus">--</p>
+        </article>
+        <article class="quick-card">
+          <h3><i class="fas fa-gas-pump"></i> Bahan Bakar</h3>
+          <p class="quick-value" id="fuelStatus">--</p>
+        </article>
+        <article class="quick-card">
+          <h3><i class="fas fa-clock"></i> Estimasi Operasi</h3>
+          <p class="quick-value" id="runtimeEstimate">--</p>
+        </article>
+      </section>
+
+      <section class="info-grid">
+        <article class="info-card wide">
+          <h2><i class="fas fa-circle-info"></i> Catatan untuk Masyarakat</h2>
+          <p class="desc" id="publicMessage">Sistem sedang mengambil informasi terbaru dari mesin.</p>
+        </article>
+        <article class="info-card wide" id="recommendation">
+          <h2><i class="fas fa-list-check"></i> Rekomendasi Tindakan</h2>
+          <ul class="tips-list" id="publicTips">
+            <li>Menunggu pembaruan data...</li>
+          </ul>
+        </article>
+      </section>
+
+      <footer class="public-footer">
+        <span id="lastUpdate">Update terakhir: -</span>
+      </footer>
+    </main>
+  </div>
 
   <script src="js/public-view.js"></script>
 </body>
