@@ -23,6 +23,8 @@
       <nav class="ps-nav">
         <a href="#statusHero"><i class="fas fa-house"></i> Ringkasan</a>
         <a href="#quickStatus"><i class="fas fa-chart-simple"></i> Status Cepat</a>
+        <a href="#userProfile"><i class="fas fa-user"></i> Profil Pengguna</a>
+        <a href="#analysisDetail"><i class="fas fa-microchip"></i> Analisa Sistem</a>
         <a href="#recommendation"><i class="fas fa-lightbulb"></i> Rekomendasi</a>
       </nav>
 
@@ -67,6 +69,23 @@
       </section>
 
       <section class="info-grid">
+        <article class="info-card" id="userProfile">
+          <h2><i class="fas fa-user-circle"></i> Profil Pengguna</h2>
+          <div class="profile-items">
+            <p><strong>Nama:</strong> <span id="profileName">-</span></p>
+            <p><strong>Peran:</strong> Masyarakat Awam</p>
+            <p><strong>Kebutuhan:</strong> Pasokan listrik rumah tangga yang stabil dan aman.</p>
+          </div>
+        </article>
+        <article class="info-card" id="analysisDetail">
+          <h2><i class="fas fa-wave-square"></i> Detail Sinkronisasi Grid</h2>
+          <ul class="analysis-list">
+            <li><span>Tegangan</span><strong id="analysisVoltage">--</strong></li>
+            <li><span>Frekuensi</span><strong id="analysisFrequency">--</strong></li>
+            <li><span>Status Sinkronisasi</span><strong id="analysisSync">--</strong></li>
+            <li><span>Sistem Kendali Otomatis</span><strong id="analysisControl">--</strong></li>
+          </ul>
+        </article>
         <article class="info-card wide">
           <h2><i class="fas fa-circle-info"></i> Catatan untuk Masyarakat</h2>
           <p class="desc" id="publicMessage">Sistem sedang mengambil informasi terbaru dari mesin.</p>
