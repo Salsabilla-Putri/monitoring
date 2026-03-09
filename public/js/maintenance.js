@@ -190,10 +190,10 @@ function exportCSV() {
 document.addEventListener('DOMContentLoaded', () => {
     // Load Sidebar
     fetch('sidebar.html').then(r=>r.text()).then(h =>document.getElementById('sidebar-container').innerHTML = h);
-    document.getElementById('userarea').querySelector('span').innerText = localStorage.getItem('userRole') || 'Operator';
+    document.getElementById('userarea').querySelector('span').innerText = localStorage.getItem('username') || 'Pengguna';
     
     // User Info
-    const user = localStorage.getItem('userRole') || 'Operator';
+    const user = localStorage.getItem('username') || 'Pengguna';
     document.getElementById('userarea').querySelector('span').innerText = user;
 
     // Load Data Pertama Kali

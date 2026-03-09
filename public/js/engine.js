@@ -196,7 +196,7 @@ window.removeThreshold = async () => {
 // === INIT ===
 document.addEventListener('DOMContentLoaded', () => {
     fetch('sidebar.html').then(r=>r.text()).then(h=>document.getElementById('sidebar-container').innerHTML=h);
-    document.getElementById('userarea').querySelector('span').innerText = localStorage.getItem('userRole') || 'Operator';
+    document.getElementById('userarea').querySelector('span').innerText = localStorage.getItem('username') || 'Pengguna';
     loadThresholds();
     fetchData();
     fetchAlerts();
