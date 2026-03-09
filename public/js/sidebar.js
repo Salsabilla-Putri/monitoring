@@ -17,6 +17,14 @@ function initSidebarEvents() {
   }
 }
 
+
+function syncTopbarUserLabel() {
+  const profileLabel = localStorage.getItem('username') || 'Pengguna';
+  document.querySelectorAll('.user-info span').forEach((el) => {
+    el.innerText = profileLabel;
+  });
+}
+
 function setActiveLink() {
   const path = window.location.pathname;
   const page = path.split('/').pop() || 'index.html';
@@ -68,6 +76,8 @@ document.addEventListener('DOMContentLoaded', function () {
       setupSidebarHoverState();
     })
     .catch((err) => console.error('Gagal memuat sidebar:', err));
+
+  syncTopbarUserLabel();
 
   // Delegasi click untuk area user (ikon + teks)
   document.addEventListener('click', function (e) {
