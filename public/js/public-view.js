@@ -21,14 +21,23 @@ function updatePublicView(data) {
   const lastEl = document.getElementById('lastUpdate');
   const hero = document.getElementById('statusHero');
 
+  const profileName = document.getElementById('profileName');
+  const analysisVoltage = document.getElementById('analysisVoltage');
+  const analysisFrequency = document.getElementById('analysisFrequency');
+  const analysisSync = document.getElementById('analysisSync');
+  const analysisControl = document.getElementById('analysisControl');
+
   const isRunning = String(data.status || '').toLowerCase() === 'on' || Number(data.rpm || 0) > 0;
   const volt = Number(data.volt || 0);
   const freq = Number(data.freq || 0);
   const fuel = Number(data.fuel || 0);
   const temp = Number(data.temp || data.coolant || 0);
   const oil = Number(data.oil || 0);
+  const syncText = String(data.sync || '').toUpperCase();
 
   const tips = [];
+
+  profileName.textContent = localStorage.getItem('username') || 'Pengguna Umum';
 
   if (isRunning) {
     stateEl.textContent = 'Generator Sedang Menyala';
@@ -62,14 +71,26 @@ function updatePublicView(data) {
   engineEl.textContent = engineNormal ? 'Normal' : 'Perlu Pemeriksaan';
   if (!engineNormal) tips.push('Parameter mesin motor terdeteksi perlu pemeriksaan oleh engineer.');
 
+  analysisVoltage.textContent = `${volt.toFixed(1)} V ${electricStable ? '(sesuai standar rumah tangga)' : '(di luar target 200-240V)'}`;
+  analysisFrequency.textContent = `${freq.toFixed(1)} Hz ${freq >= 48 && freq <= 52 ? '(sinkron)' : '(perlu stabilisasi)'}`;
+
+  const syncOk = syncText.includes('ON-GRID') || syncText.includes('SYNC');
+  analysisSync.textContent = syncOk
+    ? 'Tersinkron dengan grid utilitas'
+    : (isRunning ? 'Mode isolasi / transisi sinkronisasi' : 'Tidak aktif');
+
+  analysisControl.textContent = electricStable && syncOk
+    ? 'Kendali otomatis bekerja normal (start, sinkron, transfer beban)'
+    : 'Sistem otomatis memantau dan menyesuaikan parameter sinkronisasi';
+
   if (!isRunning) {
-    msgEl.textContent = 'Generator sedang tidak beroperasi. Jika terjadi pemadaman, tim engineer akan menyalakan unit sesuai prosedur.';
+    msgEl.textContent = 'Generator sedang tidak beroperasi. Jika terjadi pemadaman, sistem kendali otomatis akan menyalakan unit sesuai prosedur rumah tangga.';
   } else if (!electricStable) {
-    msgEl.textContent = 'Generator aktif namun kualitas listrik belum stabil. Tim engineer sedang melakukan pemantauan intensif.';
+    msgEl.textContent = 'Generator aktif namun kualitas listrik belum stabil. Sistem sinkronisasi otomatis sedang menyesuaikan tegangan/frekuensi agar aman untuk beban rumah tangga.';
   } else if (fuel < 25) {
-    msgEl.textContent = 'Generator berjalan normal tetapi bahan bakar rendah. Tim operasional sudah diinformasikan.';
+    msgEl.textContent = 'Generator berjalan normal dan sinkron dengan grid, tetapi bahan bakar rendah. Tim operasional sudah diinformasikan.';
   } else {
-    msgEl.textContent = 'Kondisi generator dalam batas aman untuk layanan masyarakat.';
+    msgEl.textContent = 'Kondisi generator aman untuk kebutuhan rumah tangga, dengan sinkronisasi grid dan kendali otomatis aktif.';
   }
 
   if (tips.length === 0) {
