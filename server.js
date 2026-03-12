@@ -421,61 +421,45 @@ app.get('/api/reports', async (req, res) => {
 
         const normalizeNumeric = (value) => {
             if (value === null || value === undefined || value === '') return null;
-            if (typeof value === 'string') {
-                const cleaned = value.replace(',', '.').replace(/[^0-9.+-]/g, '');
-                const parsed = Number(cleaned);
-                return Number.isFinite(parsed) ? parsed : null;
-            }
             const parsed = Number(value);
             return Number.isFinite(parsed) ? parsed : null;
         };
 
-        const parseTimestamp = (value) => {
-            if (!value) return null;
-            const date = new Date(value);
-            return Number.isNaN(date.getTime()) ? null : date;
-        };
-
-        const normalizeRow = (rawRow) => {
-            const nested = rawRow.data && typeof rawRow.data === 'object' ? rawRow.data
-                : rawRow.payload && typeof rawRow.payload === 'object' ? rawRow.payload
-                : rawRow;
-
-            const timestampRaw =
-                rawRow.timestamp || rawRow.createdAt || rawRow.date || rawRow.datetime || rawRow.time || rawRow.waktu ||
-                nested.timestamp || nested.createdAt || nested.date || nested.datetime || nested.time || nested.waktu ||
-                null;
-
-            const parsedDate = parseTimestamp(timestampRaw);
-            if (!parsedDate) return null;
+        const normalizeRow = (row) => {
+            const timestamp = row.timestamp || row.createdAt || row.date || row.waktu || null;
+            if (!timestamp) return null;
 
             return {
-                ...rawRow,
-                ...nested,
-                timestamp: parsedDate.toISOString(),
-                rpm: normalizeNumeric(nested.rpm),
-                volt: normalizeNumeric(nested.volt ?? nested.voltage),
-                amp: normalizeNumeric(nested.amp ?? nested.current),
-                power: normalizeNumeric(nested.power ?? nested.kw ?? nested.kW),
-                freq: normalizeNumeric(nested.freq ?? nested.frequency),
-                temp: normalizeNumeric(nested.temp ?? nested.temperature),
-                coolant: normalizeNumeric(nested.coolant ?? nested.temp ?? nested.temperature),
-                fuel: normalizeNumeric(nested.fuel),
-                oil: normalizeNumeric(nested.oil),
-                iat: normalizeNumeric(nested.iat),
-                map: normalizeNumeric(nested.map),
-                afr: normalizeNumeric(nested.afr),
-                tps: normalizeNumeric(nested.tps)
+                ...row,
+                timestamp,
+                rpm: normalizeNumeric(row.rpm),
+                volt: normalizeNumeric(row.volt ?? row.voltage),
+                amp: normalizeNumeric(row.amp ?? row.current),
+                power: normalizeNumeric(row.power ?? row.kw ?? row.kW),
+                freq: normalizeNumeric(row.freq ?? row.frequency),
+                temp: normalizeNumeric(row.temp ?? row.temperature),
+                coolant: normalizeNumeric(row.coolant ?? row.temp ?? row.temperature),
+                fuel: normalizeNumeric(row.fuel),
+                oil: normalizeNumeric(row.oil),
+                iat: normalizeNumeric(row.iat),
+                map: normalizeNumeric(row.map),
+                afr: normalizeNumeric(row.afr),
+                tps: normalizeNumeric(row.tps)
             };
         };
 
-        const requestedRange = (() => {
-            if (startDate && endDate) {
-                const start = parseTimestamp(startDate);
-                const end = parseTimestamp(endDate);
-                if (start && end) {
-                    return { start, end };
-                }
+        const timeFilter = {};
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+                timeFilter.$gte = start;
+                timeFilter.$lte = end;
+            }
+        } else if (hours) {
+            const h = Number(hours);
+            if (!Number.isNaN(h) && h > 0) {
+                timeFilter.$gte = new Date(Date.now() - h * 3600 * 1000);
             }
             if (hours) {
                 const h = Number(hours);
@@ -494,33 +478,27 @@ app.get('/api/reports', async (req, res) => {
             return { [fieldName]: clause };
         };
 
+        const buildMongoQuery = (fieldName) =>
+            Object.keys(timeFilter).length ? { [fieldName]: timeFilter } : {};
+
         let reports = [];
+        const candidateCollections = ['reports', 'generatordatas', 'generator_data'];
 
         if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
             const existingCollections = await mongoose.connection.db.listCollections({}, { nameOnly: true }).toArray();
-            const collectionNames = existingCollections.map((c) => c.name);
+            const existingNames = new Set(existingCollections.map((c) => c.name));
 
-            const preferred = ['reports', 'generatordatas', 'generator_data', 'generatorData'];
-            const inferred = collectionNames.filter((name) => /report|generator|engine|monitor/i.test(name));
-            const ordered = [...new Set([...preferred, ...inferred])].filter((name) => collectionNames.includes(name));
+            for (const collectionName of candidateCollections) {
+                if (!existingNames.has(collectionName)) continue;
 
-            for (const collectionName of ordered) {
                 const collection = mongoose.connection.db.collection(collectionName);
-
-                const [byTimestamp, byCreatedAt, byDate, byTime, withoutFilter] = await Promise.all([
-                    collection.find(buildDbTimeFilter('timestamp')).sort({ timestamp: -1 }).limit(limit).toArray(),
-                    collection.find(buildDbTimeFilter('createdAt')).sort({ createdAt: -1 }).limit(limit).toArray(),
-                    collection.find(buildDbTimeFilter('date')).sort({ date: -1 }).limit(limit).toArray(),
-                    collection.find(buildDbTimeFilter('time')).sort({ time: -1 }).limit(limit).toArray(),
-                    collection.find({}).sort({ _id: -1 }).limit(limit * 2).toArray()
+                const [byTimestamp, byCreatedAt, byDate] = await Promise.all([
+                    collection.find(buildMongoQuery('timestamp')).sort({ timestamp: -1 }).limit(limit).toArray(),
+                    collection.find(buildMongoQuery('createdAt')).sort({ createdAt: -1 }).limit(limit).toArray(),
+                    collection.find(buildMongoQuery('date')).sort({ date: -1 }).limit(limit).toArray()
                 ]);
 
-                const picked = byTimestamp.length ? byTimestamp
-                    : byCreatedAt.length ? byCreatedAt
-                    : byDate.length ? byDate
-                    : byTime.length ? byTime
-                    : withoutFilter;
-
+                const picked = byTimestamp.length ? byTimestamp : (byCreatedAt.length ? byCreatedAt : byDate);
                 if (picked.length) {
                     reports = picked;
                     break;
@@ -529,27 +507,21 @@ app.get('/api/reports', async (req, res) => {
         }
 
         if (!reports.length) {
-            reports = await GeneratorData.find({})
+            const orConditions = Object.keys(timeFilter).length
+                ? [{ timestamp: timeFilter }, { createdAt: timeFilter }]
+                : [];
+
+            const fallbackQuery = orConditions.length ? { $or: orConditions } : {};
+            reports = await GeneratorData.find(fallbackQuery)
                 .sort({ timestamp: -1 })
-                .limit(limit * 2)
+                .limit(limit)
                 .lean();
         }
 
-        let normalizedReports = reports
+        const normalizedReports = reports
             .map(normalizeRow)
             .filter(Boolean)
             .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-        if (requestedRange) {
-            normalizedReports = normalizedReports.filter((row) => {
-                const rowDate = new Date(row.timestamp);
-                if (requestedRange.start && rowDate < requestedRange.start) return false;
-                if (requestedRange.end && rowDate > requestedRange.end) return false;
-                return true;
-            });
-        }
-
-        normalizedReports = normalizedReports.slice(0, limit);
 
         res.json({ success: true, count: normalizedReports.length, data: normalizedReports });
     } catch (err) {
