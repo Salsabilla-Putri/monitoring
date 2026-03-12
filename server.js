@@ -419,62 +419,111 @@ app.get('/api/reports', async (req, res) => {
         const limit = Number.isNaN(parsedLimit) ? 5000 : Math.max(1, Math.min(parsedLimit, 10000));
         const { hours, startDate, endDate } = req.query;
 
-        const toNumber = (value) => {
+        const normalizeNumeric = (value) => {
             if (value === null || value === undefined || value === '') return null;
-            const n = Number(value);
-            return Number.isFinite(n) ? n : null;
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
         };
 
-        const query = {};
+        const normalizeRow = (row) => {
+            const timestamp = row.timestamp || row.createdAt || row.date || row.waktu || null;
+            if (!timestamp) return null;
+
+            return {
+                ...row,
+                timestamp,
+                rpm: normalizeNumeric(row.rpm),
+                volt: normalizeNumeric(row.volt ?? row.voltage),
+                amp: normalizeNumeric(row.amp ?? row.current),
+                power: normalizeNumeric(row.power ?? row.kw ?? row.kW),
+                freq: normalizeNumeric(row.freq ?? row.frequency),
+                temp: normalizeNumeric(row.temp ?? row.temperature),
+                coolant: normalizeNumeric(row.coolant ?? row.temp ?? row.temperature),
+                fuel: normalizeNumeric(row.fuel),
+                oil: normalizeNumeric(row.oil),
+                iat: normalizeNumeric(row.iat),
+                map: normalizeNumeric(row.map),
+                afr: normalizeNumeric(row.afr),
+                tps: normalizeNumeric(row.tps)
+            };
+        };
+
+        const timeFilter = {};
         if (startDate && endDate) {
             const start = new Date(startDate);
             const end = new Date(endDate);
             if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
-                query.timestamp = { $gte: start, $lte: end };
+                timeFilter.$gte = start;
+                timeFilter.$lte = end;
             }
-        } else {
+        } else if (hours) {
             const h = Number(hours);
-            const safeHours = (!Number.isNaN(h) && h > 0) ? h : 24;
-            query.timestamp = { $gte: new Date(Date.now() - safeHours * 3600 * 1000) };
+            if (!Number.isNaN(h) && h > 0) {
+                timeFilter.$gte = new Date(Date.now() - h * 3600 * 1000);
+            }
+            if (hours) {
+                const h = Number(hours);
+                if (!Number.isNaN(h) && h > 0) {
+                    return { start: new Date(Date.now() - h * 3600 * 1000), end: null };
+                }
+            }
+            return null;
+        })();
+
+        const buildDbTimeFilter = (fieldName) => {
+            if (!requestedRange) return {};
+            const clause = {};
+            if (requestedRange.start) clause.$gte = requestedRange.start;
+            if (requestedRange.end) clause.$lte = requestedRange.end;
+            return { [fieldName]: clause };
+        };
+
+        const buildMongoQuery = (fieldName) =>
+            Object.keys(timeFilter).length ? { [fieldName]: timeFilter } : {};
+
+        let reports = [];
+        const candidateCollections = ['reports', 'generatordatas', 'generator_data'];
+
+        if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
+            const existingCollections = await mongoose.connection.db.listCollections({}, { nameOnly: true }).toArray();
+            const existingNames = new Set(existingCollections.map((c) => c.name));
+
+            for (const collectionName of candidateCollections) {
+                if (!existingNames.has(collectionName)) continue;
+
+                const collection = mongoose.connection.db.collection(collectionName);
+                const [byTimestamp, byCreatedAt, byDate] = await Promise.all([
+                    collection.find(buildMongoQuery('timestamp')).sort({ timestamp: -1 }).limit(limit).toArray(),
+                    collection.find(buildMongoQuery('createdAt')).sort({ createdAt: -1 }).limit(limit).toArray(),
+                    collection.find(buildMongoQuery('date')).sort({ date: -1 }).limit(limit).toArray()
+                ]);
+
+                const picked = byTimestamp.length ? byTimestamp : (byCreatedAt.length ? byCreatedAt : byDate);
+                if (picked.length) {
+                    reports = picked;
+                    break;
+                }
+            }
         }
 
-        // Source of truth: model GeneratorData -> collection generatordatas
-        // (sesuai struktur MongoDB yang dikirim user).
-        let rows = await GeneratorData.find(query)
-            .sort({ timestamp: -1 })
-            .limit(limit)
-            .lean();
+        if (!reports.length) {
+            const orConditions = Object.keys(timeFilter).length
+                ? [{ timestamp: timeFilter }, { createdAt: timeFilter }]
+                : [];
 
-        // Fallback kalau range tanggal terlalu sempit: tetap tampilkan data terbaru.
-        if (!rows.length && startDate && endDate) {
-            rows = await GeneratorData.find({})
+            const fallbackQuery = orConditions.length ? { $or: orConditions } : {};
+            reports = await GeneratorData.find(fallbackQuery)
                 .sort({ timestamp: -1 })
                 .limit(limit)
                 .lean();
         }
 
-        const data = rows.map((row) => ({
-            ...row,
-            timestamp: new Date(row.timestamp).toISOString(),
-            rpm: toNumber(row.rpm),
-            volt: toNumber(row.volt),
-            amp: toNumber(row.amp),
-            power: toNumber(row.power),
-            freq: toNumber(row.freq),
-            temp: toNumber(row.temp),
-            coolant: toNumber(row.coolant ?? row.temp),
-            fuel: toNumber(row.fuel),
-            oil: toNumber(row.oil),
-            iat: toNumber(row.iat),
-            map: toNumber(row.map),
-            afr: toNumber(row.afr),
-            tps: toNumber(row.tps),
-            sync: row.sync ?? null,
-            status: row.status ?? null,
-            deviceId: row.deviceId ?? null
-        }));
+        const normalizedReports = reports
+            .map(normalizeRow)
+            .filter(Boolean)
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-        res.json({ success: true, count: data.length, data });
+        res.json({ success: true, count: normalizedReports.length, data: normalizedReports });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
