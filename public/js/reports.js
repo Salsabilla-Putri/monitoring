@@ -1,7 +1,7 @@
 // public/js/reports.js
 
 // === CONFIGURATION ===
-const API_URL = '/api/engine-data/history';
+const API_URL = '/api/reports';
 
 // Konfigurasi Parameter
 const SENSORS = {
@@ -239,6 +239,23 @@ function updateDateFromHours(hours) {
     }
 }
 
+function normalizeReportRows(rows) {
+    if (!Array.isArray(rows)) return [];
+
+    return rows.map((row) => {
+        const tempVal = row.temp ?? row.temperature;
+        const powerKw = row.power ?? row.kw;
+
+        return {
+            ...row,
+            temp: tempVal,
+            coolant: row.coolant ?? tempVal,
+            power: powerKw,
+            timestamp: row.timestamp || row.createdAt || new Date().toISOString()
+        };
+    }).filter((row) => row && row.timestamp);
+}
+
 // --- 6. DATA FETCHING ---
 async function loadReportData() {
     console.log('Loading report data...');
@@ -294,9 +311,10 @@ async function loadReportData() {
         }
         
         const result = await response.json();
+        const rows = Array.isArray(result) ? result : (result.data || []);
         
-        if (result.success && result.data) {
-            currentData = result.data;
+        if ((result.success !== false) && rows) {
+            currentData = normalizeReportRows(rows);
             
             if (currentData.length > 0) {
                 updateOverview(currentData);

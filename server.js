@@ -412,25 +412,46 @@ app.delete('/api/maintenance/:id', async (req, res) => {
 });
 // Tambahkan kode ini di dalam server.js (sebelum app.listen)
 
-// Definisi Schema untuk Report (Sesuaikan field dengan database Anda)
-const reportSchema = new mongoose.Schema({
-    timestamp: { type: Date, default: Date.now },
-    engineId: String,
-    temperature: Number,
-    rpm: Number,
-    status: String
-}, { collection: 'reports' }); // Pastikan nama collection sesuai
-
-const Report = mongoose.model('Report', reportSchema);
-
-// API Endpoint untuk mengambil data report
+// API Endpoint untuk mengambil data report dari collection MongoDB yang ditetapkan
 app.get('/api/reports', async (req, res) => {
     try {
-        // Ambil semua data, urutkan dari yang terbaru
-        const reports = await Report.find().sort({ timestamp: -1 }).limit(100);
-        res.json(reports);
+        const { limit = 5000, hours, startDate, endDate } = req.query;
+        const query = {};
+
+        if (startDate && endDate) {
+            query.timestamp = {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            };
+        } else if (hours) {
+            const h = Number(hours);
+            if (!Number.isNaN(h) && h > 0) {
+                query.timestamp = { $gte: new Date(Date.now() - h * 3600 * 1000) };
+            }
+        }
+
+        let reports = [];
+
+        if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
+            const collection = mongoose.connection.db.collection('reports');
+            reports = await collection
+                .find(query)
+                .sort({ timestamp: -1 })
+                .limit(parseInt(limit, 10))
+                .toArray();
+        }
+
+        // Fallback: jika collection reports kosong / koneksi belum siap, pakai data engine-data
+        if (!reports.length) {
+            reports = await GeneratorData.find(query)
+                .sort({ timestamp: -1 })
+                .limit(parseInt(limit, 10))
+                .lean();
+        }
+
+        res.json({ success: true, data: reports });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
