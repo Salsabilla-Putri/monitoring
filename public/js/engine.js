@@ -1,6 +1,8 @@
 // === CONFIGURATION ===
 const API_URL = '/api';
 const PARAMS = ['volt','amp','power','freq','rpm','oil','coolant','iat','fuel','afr','map','tps'];
+const ESP_FRESHNESS_MS = 15000;
+
 
 
 let serverThresholds = {}; 
@@ -38,7 +40,11 @@ async function fetchData() {
         
         if (json.success) {
             updateDashboard(json.data);
-            setEspConnectionStatus(true);
+            const ts = Date.parse(json.data?.timestamp || '');
+            const isFresh = Number.isFinite(ts) && (Date.now() - ts <= ESP_FRESHNESS_MS);
+            setEspConnectionStatus(isFresh);
+        } else {
+            setEspConnectionStatus(false);
         }
     } catch (err) {
         setEspConnectionStatus(false);
