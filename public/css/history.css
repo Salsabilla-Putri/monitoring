@@ -16,12 +16,13 @@ body { font-family: var(--app-font-family); background:#f1f5f9; color:#0f172a; o
 
 /* SUMMARY CARDS */
 .history-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 25px; }
-.summary-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: center; }
+.summary-card { background: white; border-radius: 15px; padding: 20px; min-height: 112px; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); text-align: center; display: flex; flex-direction: column; justify-content: center; transition: transform 0.2s; }
 .summary-card.records { border-left: 4px solid var(--primary); }
 .summary-card.alerts { border-left: 4px solid var(--danger); }
 .summary-card.parameters { border-left: 4px solid var(--secondary); }
 .summary-card.period { border-left: 4px solid var(--warning); }
-.summary-value { font-size: 28px; font-weight: 700; margin-bottom: 5px; }
+.summary-card:hover { transform: translateY(-5px); }
+.summary-value { font-size: 28px; font-weight: 700; margin-bottom: 2px; }
 .summary-label { font-size: var(--text-base-size); color: var(--muted); }
 
 /* FILTER SECTION */

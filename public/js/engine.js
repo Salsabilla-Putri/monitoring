@@ -1,9 +1,24 @@
 // === CONFIGURATION ===
 const API_URL = '/api';
 const PARAMS = ['volt','amp','power','freq','rpm','oil','coolant','iat','fuel','afr','map','tps'];
+const ESP_FRESHNESS_MS = 15000;
+
 
 let serverThresholds = {}; 
 let activeModalParam = null;
+
+function setEspConnectionStatus(isConnected) {
+    const el = document.getElementById('espConnection');
+    if (!el) return;
+
+    if (isConnected) {
+        el.className = 'esp-connection status-connected';
+        el.innerHTML = '<i class="fas fa-microchip"></i><span>ESP System: Terkoneksi</span>';
+    } else {
+        el.className = 'esp-connection status-disconnected';
+        el.innerHTML = '<i class="fas fa-microchip"></i><span>ESP System: Tidak Konek</span>';
+    }
+}
 
 // === DATA FETCHING ===
 async function loadThresholds() {
@@ -24,10 +39,14 @@ async function fetchData() {
         
         if (json.success) {
             updateDashboard(json.data);
-            document.getElementById('apiStatus').innerHTML = '<span style="color:#10b981">● Connected</span>';
+            const ts = Date.parse(json.data?.timestamp || '');
+            const isFresh = Number.isFinite(ts) && (Date.now() - ts <= ESP_FRESHNESS_MS);
+            setEspConnectionStatus(isFresh);
+        } else {
+            setEspConnectionStatus(false);
         }
     } catch (err) {
-        document.getElementById('apiStatus').innerHTML = '<span style="color:#ef4444">● Offline</span>';
+        setEspConnectionStatus(false);
     }
 }
 
@@ -197,6 +216,7 @@ window.removeThreshold = async () => {
 document.addEventListener('DOMContentLoaded', () => {
     fetch('sidebar.html').then(r=>r.text()).then(h=>document.getElementById('sidebar-container').innerHTML=h);
     document.getElementById('userarea').querySelector('span').innerText = localStorage.getItem('username') || 'Pengguna';
+    setEspConnectionStatus(false);
     loadThresholds();
     fetchData();
     fetchAlerts();
