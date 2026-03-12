@@ -4,6 +4,7 @@ const PARAMS = ['volt','amp','power','freq','rpm','oil','coolant','iat','fuel','
 const ESP_FRESHNESS_MS = 15000;
 
 
+
 let serverThresholds = {}; 
 let activeModalParam = null;
 
@@ -13,10 +14,10 @@ function setEspConnectionStatus(isConnected) {
 
     if (isConnected) {
         el.className = 'esp-connection status-connected';
-        el.innerHTML = '<i class="fas fa-microchip"></i><span>ESP System: Terkoneksi</span>';
+        el.innerHTML = '<i class="fas fa-microchip"></i><span>Connected</span>';
     } else {
         el.className = 'esp-connection status-disconnected';
-        el.innerHTML = '<i class="fas fa-microchip"></i><span>ESP System: Tidak Konek</span>';
+        el.innerHTML = '<i class="fas fa-microchip"></i><span>Disconnected</span>';
     }
 }
 
