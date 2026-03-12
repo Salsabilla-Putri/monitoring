@@ -415,41 +415,143 @@ app.delete('/api/maintenance/:id', async (req, res) => {
 // API Endpoint untuk mengambil data report dari collection MongoDB yang ditetapkan
 app.get('/api/reports', async (req, res) => {
     try {
-        const { limit = 5000, hours, startDate, endDate } = req.query;
-        const query = {};
+        const parsedLimit = parseInt(req.query.limit, 10);
+        const limit = Number.isNaN(parsedLimit) ? 5000 : Math.max(1, Math.min(parsedLimit, 10000));
+        const { hours, startDate, endDate } = req.query;
 
-        if (startDate && endDate) {
-            query.timestamp = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            };
-        } else if (hours) {
-            const h = Number(hours);
-            if (!Number.isNaN(h) && h > 0) {
-                query.timestamp = { $gte: new Date(Date.now() - h * 3600 * 1000) };
+        const normalizeNumeric = (value) => {
+            if (value === null || value === undefined || value === '') return null;
+            if (typeof value === 'string') {
+                const cleaned = value.replace(',', '.').replace(/[^0-9.+-]/g, '');
+                const parsed = Number(cleaned);
+                return Number.isFinite(parsed) ? parsed : null;
             }
-        }
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+
+        const parseTimestamp = (value) => {
+            if (!value) return null;
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? null : date;
+        };
+
+        const normalizeRow = (rawRow) => {
+            const nested = rawRow.data && typeof rawRow.data === 'object' ? rawRow.data
+                : rawRow.payload && typeof rawRow.payload === 'object' ? rawRow.payload
+                : rawRow;
+
+            const timestampRaw =
+                rawRow.timestamp || rawRow.createdAt || rawRow.date || rawRow.datetime || rawRow.time || rawRow.waktu ||
+                nested.timestamp || nested.createdAt || nested.date || nested.datetime || nested.time || nested.waktu ||
+                null;
+
+            const parsedDate = parseTimestamp(timestampRaw);
+            if (!parsedDate) return null;
+
+            return {
+                ...rawRow,
+                ...nested,
+                timestamp: parsedDate.toISOString(),
+                rpm: normalizeNumeric(nested.rpm),
+                volt: normalizeNumeric(nested.volt ?? nested.voltage),
+                amp: normalizeNumeric(nested.amp ?? nested.current),
+                power: normalizeNumeric(nested.power ?? nested.kw ?? nested.kW),
+                freq: normalizeNumeric(nested.freq ?? nested.frequency),
+                temp: normalizeNumeric(nested.temp ?? nested.temperature),
+                coolant: normalizeNumeric(nested.coolant ?? nested.temp ?? nested.temperature),
+                fuel: normalizeNumeric(nested.fuel),
+                oil: normalizeNumeric(nested.oil),
+                iat: normalizeNumeric(nested.iat),
+                map: normalizeNumeric(nested.map),
+                afr: normalizeNumeric(nested.afr),
+                tps: normalizeNumeric(nested.tps)
+            };
+        };
+
+        const requestedRange = (() => {
+            if (startDate && endDate) {
+                const start = parseTimestamp(startDate);
+                const end = parseTimestamp(endDate);
+                if (start && end) {
+                    return { start, end };
+                }
+            }
+            if (hours) {
+                const h = Number(hours);
+                if (!Number.isNaN(h) && h > 0) {
+                    return { start: new Date(Date.now() - h * 3600 * 1000), end: null };
+                }
+            }
+            return null;
+        })();
+
+        const buildDbTimeFilter = (fieldName) => {
+            if (!requestedRange) return {};
+            const clause = {};
+            if (requestedRange.start) clause.$gte = requestedRange.start;
+            if (requestedRange.end) clause.$lte = requestedRange.end;
+            return { [fieldName]: clause };
+        };
 
         let reports = [];
 
         if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-            const collection = mongoose.connection.db.collection('reports');
-            reports = await collection
-                .find(query)
-                .sort({ timestamp: -1 })
-                .limit(parseInt(limit, 10))
-                .toArray();
+            const existingCollections = await mongoose.connection.db.listCollections({}, { nameOnly: true }).toArray();
+            const collectionNames = existingCollections.map((c) => c.name);
+
+            const preferred = ['reports', 'generatordatas', 'generator_data', 'generatorData'];
+            const inferred = collectionNames.filter((name) => /report|generator|engine|monitor/i.test(name));
+            const ordered = [...new Set([...preferred, ...inferred])].filter((name) => collectionNames.includes(name));
+
+            for (const collectionName of ordered) {
+                const collection = mongoose.connection.db.collection(collectionName);
+
+                const [byTimestamp, byCreatedAt, byDate, byTime, withoutFilter] = await Promise.all([
+                    collection.find(buildDbTimeFilter('timestamp')).sort({ timestamp: -1 }).limit(limit).toArray(),
+                    collection.find(buildDbTimeFilter('createdAt')).sort({ createdAt: -1 }).limit(limit).toArray(),
+                    collection.find(buildDbTimeFilter('date')).sort({ date: -1 }).limit(limit).toArray(),
+                    collection.find(buildDbTimeFilter('time')).sort({ time: -1 }).limit(limit).toArray(),
+                    collection.find({}).sort({ _id: -1 }).limit(limit * 2).toArray()
+                ]);
+
+                const picked = byTimestamp.length ? byTimestamp
+                    : byCreatedAt.length ? byCreatedAt
+                    : byDate.length ? byDate
+                    : byTime.length ? byTime
+                    : withoutFilter;
+
+                if (picked.length) {
+                    reports = picked;
+                    break;
+                }
+            }
         }
 
-        // Fallback: jika collection reports kosong / koneksi belum siap, pakai data engine-data
         if (!reports.length) {
-            reports = await GeneratorData.find(query)
+            reports = await GeneratorData.find({})
                 .sort({ timestamp: -1 })
-                .limit(parseInt(limit, 10))
+                .limit(limit * 2)
                 .lean();
         }
 
-        res.json({ success: true, data: reports });
+        let normalizedReports = reports
+            .map(normalizeRow)
+            .filter(Boolean)
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        if (requestedRange) {
+            normalizedReports = normalizedReports.filter((row) => {
+                const rowDate = new Date(row.timestamp);
+                if (requestedRange.start && rowDate < requestedRange.start) return false;
+                if (requestedRange.end && rowDate > requestedRange.end) return false;
+                return true;
+            });
+        }
+
+        normalizedReports = normalizedReports.slice(0, limit);
+
+        res.json({ success: true, count: normalizedReports.length, data: normalizedReports });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
