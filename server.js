@@ -415,41 +415,66 @@ app.delete('/api/maintenance/:id', async (req, res) => {
 // API Endpoint untuk mengambil data report dari collection MongoDB yang ditetapkan
 app.get('/api/reports', async (req, res) => {
     try {
-        const { limit = 5000, hours, startDate, endDate } = req.query;
+        const parsedLimit = parseInt(req.query.limit, 10);
+        const limit = Number.isNaN(parsedLimit) ? 5000 : Math.max(1, Math.min(parsedLimit, 10000));
+        const { hours, startDate, endDate } = req.query;
+
+        const toNumber = (value) => {
+            if (value === null || value === undefined || value === '') return null;
+            const n = Number(value);
+            return Number.isFinite(n) ? n : null;
+        };
+
         const query = {};
-
         if (startDate && endDate) {
-            query.timestamp = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            };
-        } else if (hours) {
-            const h = Number(hours);
-            if (!Number.isNaN(h) && h > 0) {
-                query.timestamp = { $gte: new Date(Date.now() - h * 3600 * 1000) };
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+                query.timestamp = { $gte: start, $lte: end };
             }
+        } else {
+            const h = Number(hours);
+            const safeHours = (!Number.isNaN(h) && h > 0) ? h : 24;
+            query.timestamp = { $gte: new Date(Date.now() - safeHours * 3600 * 1000) };
         }
 
-        let reports = [];
+        // Source of truth: model GeneratorData -> collection generatordatas
+        // (sesuai struktur MongoDB yang dikirim user).
+        let rows = await GeneratorData.find(query)
+            .sort({ timestamp: -1 })
+            .limit(limit)
+            .lean();
 
-        if (mongoose.connection.readyState === 1 && mongoose.connection.db) {
-            const collection = mongoose.connection.db.collection('reports');
-            reports = await collection
-                .find(query)
+        // Fallback kalau range tanggal terlalu sempit: tetap tampilkan data terbaru.
+        if (!rows.length && startDate && endDate) {
+            rows = await GeneratorData.find({})
                 .sort({ timestamp: -1 })
-                .limit(parseInt(limit, 10))
-                .toArray();
-        }
-
-        // Fallback: jika collection reports kosong / koneksi belum siap, pakai data engine-data
-        if (!reports.length) {
-            reports = await GeneratorData.find(query)
-                .sort({ timestamp: -1 })
-                .limit(parseInt(limit, 10))
+                .limit(limit)
                 .lean();
         }
 
-        res.json({ success: true, data: reports });
+        const data = rows.map((row) => ({
+            ...row,
+            timestamp: new Date(row.timestamp).toISOString(),
+            rpm: toNumber(row.rpm),
+            volt: toNumber(row.volt),
+            amp: toNumber(row.amp),
+            power: toNumber(row.power),
+            freq: toNumber(row.freq),
+            temp: toNumber(row.temp),
+            coolant: toNumber(row.coolant ?? row.temp),
+            fuel: toNumber(row.fuel),
+            oil: toNumber(row.oil),
+            iat: toNumber(row.iat),
+            map: toNumber(row.map),
+            afr: toNumber(row.afr),
+            tps: toNumber(row.tps),
+            sync: row.sync ?? null,
+            status: row.status ?? null,
+            deviceId: row.deviceId ?? null
+        }));
+
+        res.json({ success: true, count: data.length, data });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
