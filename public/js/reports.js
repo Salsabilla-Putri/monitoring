@@ -315,6 +315,17 @@ async function loadReportData() {
         
         if ((result.success !== false) && rows) {
             currentData = normalizeReportRows(rows);
+
+            // Fallback: jika filter tanggal terlalu sempit/format DB berbeda,
+            // ambil data 30 hari terakhir agar page tetap menampilkan data.
+            if (currentData.length === 0 && dateFrom && dateTo && dateFrom.value && dateTo.value) {
+                const fallbackRes = await fetch(`${API_URL}?limit=5000&hours=720`);
+                if (fallbackRes.ok) {
+                    const fallbackJson = await fallbackRes.json();
+                    const fallbackRows = Array.isArray(fallbackJson) ? fallbackJson : (fallbackJson.data || []);
+                    currentData = normalizeReportRows(fallbackRows);
+                }
+            }
             
             if (currentData.length > 0) {
                 updateOverview(currentData);

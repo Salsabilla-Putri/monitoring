@@ -461,7 +461,22 @@ app.get('/api/reports', async (req, res) => {
             if (!Number.isNaN(h) && h > 0) {
                 timeFilter.$gte = new Date(Date.now() - h * 3600 * 1000);
             }
-        }
+            if (hours) {
+                const h = Number(hours);
+                if (!Number.isNaN(h) && h > 0) {
+                    return { start: new Date(Date.now() - h * 3600 * 1000), end: null };
+                }
+            }
+            return null;
+        })();
+
+        const buildDbTimeFilter = (fieldName) => {
+            if (!requestedRange) return {};
+            const clause = {};
+            if (requestedRange.start) clause.$gte = requestedRange.start;
+            if (requestedRange.end) clause.$lte = requestedRange.end;
+            return { [fieldName]: clause };
+        };
 
         const buildMongoQuery = (fieldName) =>
             Object.keys(timeFilter).length ? { [fieldName]: timeFilter } : {};
