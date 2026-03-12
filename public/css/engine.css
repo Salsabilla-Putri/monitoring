@@ -120,6 +120,32 @@ body {
 .ind-off { background: #fee2e2; color: #7f1d1d; }
 .ind-neutral { background: #f3f4f6; color: #374151; }
 
+
+.esp-connection {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--text-sm-size);
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 999px;
+}
+
+.esp-connection.status-connected {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.esp-connection.status-disconnected {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.esp-connection.status-connecting {
+    background: #f3f4f6;
+    color: #374151;
+}
+
 /* === ALERTS TABLE === */
 .alerts-card { 
     margin-top: 18px; padding: 16px; border-radius: 10px; 
