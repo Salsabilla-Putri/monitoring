@@ -4,6 +4,7 @@ const PARAMS = ['volt','amp','power','freq','rpm','oil','coolant','iat','fuel','
 const ESP_FRESHNESS_MS = 15000;
 
 
+
 let serverThresholds = {}; 
 let activeModalParam = null;
 
