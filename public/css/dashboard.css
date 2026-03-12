@@ -175,6 +175,7 @@ body {
 /* === CARDS === */
 .overview-card {
     background: white; border-radius: 15px; padding: 20px;
+    min-height: 112px;
     box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
     border: 1px solid var(--border);
     display: flex; align-items: center; gap: 15px;
