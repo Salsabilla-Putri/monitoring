@@ -775,9 +775,7 @@ function renderSensorCards(data) {
 
         const card = document.createElement('div');
         card.className = 'sensor-card';
-        card.dataset.sensor = key;
         card.style.setProperty('--sensor-accent', accentColor);
-        card.classList.toggle('active-sensor', selectedSensors.includes(key));
         
         card.innerHTML = `
             <div class="sensor-header">
