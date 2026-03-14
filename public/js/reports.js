@@ -20,8 +20,9 @@ const SENSORS = {
 };
 
 let myChart = null;
+let fftChart = null;
 let currentData = [];
-let selectedSensors = ['rpm', 'volt']; // Default sensors to show
+let selectedSensors = ['rpm']; // Default sensor to show
 
 // --- 1. CHART MANAGEMENT ---
 function destroyChart() {
@@ -106,68 +107,56 @@ function initDatePickers() {
 
 // --- 4. SENSOR SELECTOR (untuk pilih sensor di chart) ---
 function initSensorSelector() {
-    // Buat selector sensor untuk chart
     const chartHeader = document.querySelector('.chart-header');
-    if (chartHeader) {
-        const sensorSelector = document.createElement('div');
-        sensorSelector.className = 'sensor-selector';
-        sensorSelector.style.cssText = `
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-            flex-wrap: wrap;
-        `;
-        
-        // Tambahkan beberapa sensor default
-        const defaultSensors = [
-            { key: 'rpm', name: 'RPM' },
-            { key: 'volt', name: 'Voltage' },
-            { key: 'temp', name: 'Temperature' },
-            { key: 'fuel', name: 'Fuel' }
-        ];
-        
-        defaultSensors.forEach(sensor => {
-            const btn = document.createElement('button');
-            btn.className = 'sensor-selector-btn';
-            btn.dataset.sensor = sensor.key;
-            btn.innerHTML = `<i class="${SENSORS[sensor.key]?.icon || 'fas fa-chart-line'}"></i> ${sensor.name}`;
-            btn.style.cssText = `
-                padding: 6px 12px;
-                border: 1px solid #d0d7e1;
-                border-radius: 4px;
-                background: ${selectedSensors.includes(sensor.key) ? '#1745a5' : '#f1f5f9'};
-                color: ${selectedSensors.includes(sensor.key) ? 'white' : '#0f172a'};
-                cursor: pointer;
-                font-size: 12px;
-                display: flex;
-                align-items: center;
-                gap: 5px;
-            `;
-            
-            btn.addEventListener('click', () => {
-                const sensorKey = btn.dataset.sensor;
-                const index = selectedSensors.indexOf(sensorKey);
-                
-                if (index === -1) {
-                    selectedSensors.push(sensorKey);
-                    btn.style.background = '#1745a5';
-                    btn.style.color = 'white';
-                } else {
-                    selectedSensors.splice(index, 1);
-                    btn.style.background = '#f1f5f9';
-                    btn.style.color = '#0f172a';
-                }
-                
-                // Update chart dengan sensor yang dipilih
-                if (currentData.length > 0) {
-                    renderChart(currentData);
-                }
-            });
-            
-            sensorSelector.appendChild(btn);
+    if (!chartHeader || chartHeader.querySelector('.sensor-selector')) return;
+
+    const sensorSelector = document.createElement('div');
+    sensorSelector.className = 'sensor-selector';
+
+    Object.entries(SENSORS).forEach(([sensorKey, sensor]) => {
+        const btn = document.createElement('button');
+        btn.className = 'sensor-selector-btn';
+        btn.dataset.sensor = sensorKey;
+        btn.innerHTML = `<i class="${sensor.icon || 'fas fa-chart-line'}"></i> ${sensor.name}`;
+
+        btn.addEventListener('click', () => {
+            selectSingleSensor(sensorKey);
         });
-        
-        chartHeader.appendChild(sensorSelector);
+
+        sensorSelector.appendChild(btn);
+    });
+
+    chartHeader.appendChild(sensorSelector);
+    syncSensorSelectorButtons();
+}
+
+function syncSensorSelectorButtons() {
+    document.querySelectorAll('.sensor-selector-btn').forEach((btn) => {
+        const isActive = selectedSensors.includes(btn.dataset.sensor);
+        btn.classList.toggle('active', isActive);
+    });
+}
+
+function selectSingleSensor(sensorKey, { focusChart = true } = {}) {
+    if (!SENSORS[sensorKey]) return;
+
+    selectedSensors = [sensorKey];
+    syncSensorSelectorButtons();
+
+    document.querySelectorAll('.sensor-card').forEach((card) => {
+        card.classList.toggle('active-sensor', card.dataset.sensor === sensorKey);
+    });
+
+    if (currentData.length > 0) {
+        renderChart(currentData);
+        renderFftAnalysis(currentData);
+        const dateFrom = document.getElementById('dateFrom')?.value;
+        const dateTo = document.getElementById('dateTo')?.value;
+        updateChartTitle(dateFrom, dateTo);
+
+        if (focusChart) {
+            document.getElementById('chartContainer')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     }
 }
 
@@ -214,6 +203,7 @@ function setupEventListeners() {
     // Export buttons
     document.getElementById('toggleExport')?.addEventListener('click', toggleExportOptions);
     document.getElementById('printChart')?.addEventListener('click', printChart);
+    document.getElementById('recalculateFft')?.addEventListener('click', () => renderFftAnalysis(currentData));
 }
 
 function updateDateFromHours(hours) {
@@ -316,21 +306,11 @@ async function loadReportData() {
         if ((result.success !== false) && rows) {
             currentData = normalizeReportRows(rows);
 
-            // Fallback: jika filter tanggal terlalu sempit/format DB berbeda,
-            // ambil data 30 hari terakhir agar page tetap menampilkan data.
-            if (currentData.length === 0 && dateFrom && dateTo && dateFrom.value && dateTo.value) {
-                const fallbackRes = await fetch(`${API_URL}?limit=5000&hours=720`);
-                if (fallbackRes.ok) {
-                    const fallbackJson = await fallbackRes.json();
-                    const fallbackRows = Array.isArray(fallbackJson) ? fallbackJson : (fallbackJson.data || []);
-                    currentData = normalizeReportRows(fallbackRows);
-                }
-            }
-            
             if (currentData.length > 0) {
                 updateOverview(currentData);
                 renderSensorCards(currentData);
                 renderChart(currentData);
+                renderFftAnalysis(currentData);
                 updateChartTitle(dateFrom?.value, dateTo?.value);
             } else {
                 showNoDataMessage();
@@ -416,6 +396,122 @@ function renderChart(data) {
     }
 }
 
+
+
+
+function destroyFftChart() {
+    try {
+        if (fftChart) {
+            fftChart.destroy();
+            fftChart = null;
+        }
+    } catch (error) {
+        console.warn('Error destroying FFT chart:', error);
+        fftChart = null;
+    }
+}
+
+async function renderFftAnalysis(data) {
+    const summaryEl = document.getElementById('fftSummary');
+    const insightsEl = document.getElementById('fftInsights');
+    const canvas = document.getElementById('fftChart');
+    if (!canvas || !summaryEl || !insightsEl) return;
+
+    destroyFftChart();
+    insightsEl.innerHTML = '';
+
+    const sensorKey = selectedSensors[0] || 'rpm';
+
+    try {
+        const response = await fetch('/api/reports/analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rows: data || [], sensor: sensorKey, maxPoints: 300 })
+        });
+
+        if (!response.ok) {
+            throw new Error(`FFT API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const payload = result?.data || {};
+        summaryEl.textContent = payload.summary || 'FFT summary unavailable.';
+
+        const stats = payload.stats || {};
+        const peaks = payload.peaks || [];
+        const spectrum = payload.spectrum || [];
+
+        if (stats.count != null) {
+            const statsEl = document.createElement('div');
+            statsEl.className = 'fft-pill';
+            statsEl.innerHTML = `<strong>Stats</strong><br>Count: ${stats.count}<br>Mean: ${(stats.mean ?? 0).toFixed(2)}<br>Trend: ${stats.trend || 'n/a'}`;
+            insightsEl.appendChild(statsEl);
+        }
+
+        peaks.forEach((peak, idx) => {
+            const cycPerMin = (peak.freq || 0) * 60;
+            const el = document.createElement('div');
+            el.className = 'fft-pill';
+            el.innerHTML = `<strong>Peak ${idx + 1}</strong><br>${(peak.freq || 0).toFixed(3)} Hz (${cycPerMin.toFixed(1)} cyc/min)<br>Amp: ${(peak.amp || 0).toFixed(3)}`;
+            insightsEl.appendChild(el);
+        });
+
+        if (!spectrum.length) {
+            return;
+        }
+
+        const sensor = SENSORS[sensorKey] || { name: sensorKey, color: '#1745a5' };
+        fftChart = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: spectrum.map((p) => (p.freq || 0).toFixed(3)),
+                datasets: [{
+                    label: `${sensor.name} FFT Amplitude`,
+                    data: spectrum.map((p) => p.amp || 0),
+                    borderColor: sensor.color || '#1745a5',
+                    backgroundColor: hexToRgba(sensor.color || '#1745a5', 0.12),
+                    fill: true,
+                    pointRadius: 0,
+                    tension: 0.2,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true } },
+                scales: {
+                    x: { title: { display: true, text: 'Frequency (Hz)' } },
+                    y: { title: { display: true, text: 'Amplitude' } }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('FFT analysis error:', error);
+        summaryEl.textContent = 'Failed to calculate FFT analysis.';
+        const el = document.createElement('div');
+        el.className = 'fft-pill';
+        el.textContent = error.message;
+        insightsEl.appendChild(el);
+    }
+}
+
+function formatTimestampLabel(timestamp, timeRange) {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return String(timestamp || '');
+
+    if (timeRange > 30 * 24 * 60 * 60 * 1000) {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+    }
+
+    if (timeRange > 24 * 60 * 60 * 1000) {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+            date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
 function prepareChartData(data) {
     // Sort data by timestamp
     const sortedData = [...data].sort((a, b) => 
@@ -483,31 +579,13 @@ function prepareChartData(data) {
     }
     
     return {
-        labels: displayData.map(d => d.timestamp),
+        labels: displayData.map((d) => formatTimestampLabel(d.timestamp, timeRange)),
         datasets: datasets,
         timeRange: timeRange
     };
 }
 
 function getChartOptions(timeRange) {
-    // Determine time unit based on time range
-    let timeUnit = 'hour';
-    let timeFormat = 'MMM d, HH:mm';
-    
-    if (timeRange > 30 * 24 * 60 * 60 * 1000) { // > 30 days
-        timeUnit = 'day';
-        timeFormat = 'MMM d';
-    } else if (timeRange > 7 * 24 * 60 * 60 * 1000) { // > 7 days
-        timeUnit = 'day';
-        timeFormat = 'MMM d';
-    } else if (timeRange > 24 * 60 * 60 * 1000) { // > 1 day
-        timeUnit = 'hour';
-        timeFormat = 'MMM d, HH:mm';
-    } else {
-        timeUnit = 'hour';
-        timeFormat = 'HH:mm';
-    }
-    
     return {
         responsive: true,
         maintainAspectRatio: false,
@@ -532,14 +610,7 @@ function getChartOptions(timeRange) {
                 callbacks: {
                     title: function(tooltipItems) {
                         if (tooltipItems.length > 0) {
-                            const date = new Date(tooltipItems[0].label);
-                            return date.toLocaleString('en-US', {
-                                weekday: 'short',
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                            });
+                            return tooltipItems[0].label;
                         }
                         return '';
                     },
@@ -559,17 +630,7 @@ function getChartOptions(timeRange) {
         },
         scales: {
             x: {
-                type: 'time',
-                time: {
-                    unit: timeUnit,
-                    displayFormats: {
-                        millisecond: 'HH:mm:ss',
-                        second: 'HH:mm:ss',
-                        minute: 'HH:mm',
-                        hour: timeFormat,
-                        day: 'MMM d'
-                    }
-                },
+                type: 'category',
                 grid: {
                     display: false
                 },
@@ -643,9 +704,11 @@ function updateChartTitle(startDate, endDate) {
                 day: 'numeric',
                 year: 'numeric'
             });
-            chartTitle.textContent = `Sensor Trends (${start} - ${end})`;
+            const activeSensor = SENSORS[selectedSensors[0]]?.name || 'Sensor';
+            chartTitle.textContent = `${activeSensor} Trend (${start} - ${end})`; 
         } else {
-            chartTitle.textContent = 'Sensor Trends (Last 24 Hours)';
+            const activeSensor = SENSORS[selectedSensors[0]]?.name || 'Sensor';
+            chartTitle.textContent = `${activeSensor} Trend (Last 24 Hours)`;
         }
     }
 }
@@ -807,9 +870,17 @@ function renderSensorCards(data) {
             statusClass = 'status-warning';
         }
         
+        const accentColor = statusClass === 'status-critical'
+            ? '#dc2626'
+            : statusClass === 'status-warning'
+                ? '#f97316'
+                : config.color;
+
         const card = document.createElement('div');
         card.className = 'sensor-card';
-        card.style.borderLeftColor = config.color;
+        card.dataset.sensor = key;
+        card.style.setProperty('--sensor-accent', accentColor);
+        card.classList.toggle('active-sensor', selectedSensors.includes(key));
         
         card.innerHTML = `
             <div class="sensor-header">
@@ -817,7 +888,7 @@ function renderSensorCards(data) {
                     <div class="sensor-icon" style="background: ${config.color}20; color: ${config.color}">
                         <i class="${config.icon}"></i>
                     </div>
-                    <span>${config.name}</span>
+                    <span class="sensor-title-text">${config.name}</span>
                 </div>
                 <div class="sensor-status ${statusClass}">${status.toUpperCase()}</div>
             </div>
@@ -825,7 +896,7 @@ function renderSensorCards(data) {
             <div class="sensor-stats">
                 <div class="stat-item">
                     <div class="stat-label">CURRENT</div>
-                    <div class="stat-value" style="color: ${config.color};">
+                    <div class="stat-value current-value">
                         ${current.toFixed(1)}<small style="font-size: 12px;"> ${config.unit}</small>
                     </div>
                 </div>
@@ -851,12 +922,13 @@ function renderSensorCards(data) {
                     <i class="fas fa-${min === 0 ? 'exclamation-triangle' : 'check-circle'}"></i>
                     ${values.length} readings
                 </div>
-                <div class="last-updated">
-                    Updated: ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </div>
             </div>
         `;
         
+        card.addEventListener('click', () => {
+            selectSingleSensor(key);
+        });
+
         container.appendChild(card);
     });
     
