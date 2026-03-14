@@ -19,6 +19,21 @@ const SENSORS = {
     afr: { name: 'AFR', unit: '', icon: 'fas fa-burn', color: '#3b82f6' }
 };
 
+const SENSOR_LIMITS = {
+    rpm: { min: 0, max: 5000 },
+    volt: { min: 0, max: 300 },
+    amp: { min: 0, max: 500 },
+    freq: { min: 0, max: 80 },
+    power: { min: 0, max: 2000 },
+    temp: { min: -20, max: 180 },
+    coolant: { min: -20, max: 180 },
+    fuel: { min: 0, max: 100 },
+    oil: { min: 0, max: 200 },
+    iat: { min: -20, max: 120 },
+    map: { min: 0, max: 300 },
+    afr: { min: 0, max: 40 }
+};
+
 let myChart = null;
 let fftChart = null;
 let currentData = [];
@@ -183,21 +198,122 @@ function updateDateFromHours(hours) {
     }
 }
 
+function cleanSensorValue(sensorKey, rawValue) {
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) return null;
+
+    const limits = SENSOR_LIMITS[sensorKey];
+    if (!limits) return parsed;
+    if (parsed < limits.min || parsed > limits.max) return null;
+
+    return parsed;
+}
+
+function deduplicateByTimestamp(rows) {
+    const byTime = new Map();
+
+    rows.forEach((row) => {
+        const ts = new Date(row.timestamp).getTime();
+        if (!Number.isFinite(ts)) return;
+
+        if (!byTime.has(ts)) {
+            byTime.set(ts, { ...row, __count: 1 });
+            return;
+        }
+
+        const prev = byTime.get(ts);
+        const merged = { ...prev, __count: prev.__count + 1 };
+
+        Object.keys(SENSORS).forEach((sensorKey) => {
+            const a = Number(prev[sensorKey]);
+            const b = Number(row[sensorKey]);
+
+            if (Number.isFinite(a) && Number.isFinite(b)) merged[sensorKey] = (a + b) / 2;
+            else if (!Number.isFinite(a) && Number.isFinite(b)) merged[sensorKey] = b;
+        });
+
+        byTime.set(ts, merged);
+    });
+
+    return [...byTime.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, row]) => {
+            const normalized = { ...row };
+            delete normalized.__count;
+            return normalized;
+        });
+}
+
+function removeSpikeNoise(rows) {
+    if (!Array.isArray(rows) || rows.length < 5) return rows;
+
+    const cleanRows = rows.map((row) => ({ ...row }));
+    const windowRadius = 2;
+
+    Object.keys(SENSORS).forEach((sensorKey) => {
+        const series = cleanRows.map((row) => Number(row[sensorKey]));
+
+        for (let i = 0; i < series.length; i++) {
+            const curr = series[i];
+            if (!Number.isFinite(curr)) continue;
+
+            const start = Math.max(0, i - windowRadius);
+            const end = Math.min(series.length - 1, i + windowRadius);
+            const neighborhood = [];
+
+            for (let j = start; j <= end; j++) {
+                if (j === i) continue;
+                const value = series[j];
+                if (Number.isFinite(value)) neighborhood.push(value);
+            }
+
+            if (neighborhood.length < 3) continue;
+
+            const sorted = [...neighborhood].sort((a, b) => a - b);
+            const median = sorted[Math.floor(sorted.length / 2)];
+            const deviations = sorted.map((v) => Math.abs(v - median)).sort((a, b) => a - b);
+            const mad = deviations[Math.floor(deviations.length / 2)] || 0;
+
+            if (mad === 0) continue;
+
+            const robustZ = Math.abs(curr - median) / (1.4826 * mad);
+            if (robustZ > 4.5) {
+                cleanRows[i][sensorKey] = null;
+            }
+        }
+    });
+
+    return cleanRows;
+}
+
 function normalizeReportRows(rows) {
     if (!Array.isArray(rows)) return [];
 
-    return rows.map((row) => {
+    const normalized = rows.map((row) => {
         const tempVal = row.temp ?? row.temperature;
         const powerKw = row.power ?? row.kw;
+        const timestampRaw = row.timestamp || row.createdAt || row.date || row.waktu || null;
+        const ts = new Date(timestampRaw || '').getTime();
+        if (!Number.isFinite(ts)) return null;
 
-        return {
+        const normalizedRow = {
             ...row,
-            temp: tempVal,
-            coolant: row.coolant ?? tempVal,
-            power: powerKw,
-            timestamp: row.timestamp || row.createdAt || new Date().toISOString()
+            timestamp: new Date(ts).toISOString(),
+            temp: cleanSensorValue('temp', tempVal),
+            coolant: cleanSensorValue('coolant', row.coolant ?? tempVal),
+            power: cleanSensorValue('power', powerKw)
         };
-    }).filter((row) => row && row.timestamp);
+
+        Object.keys(SENSORS).forEach((sensorKey) => {
+            if (sensorKey === 'temp' || sensorKey === 'coolant' || sensorKey === 'power') return;
+            normalizedRow[sensorKey] = cleanSensorValue(sensorKey, row[sensorKey]);
+        });
+
+        return normalizedRow;
+    }).filter(Boolean);
+
+    const deduplicated = deduplicateByTimestamp(normalized);
+    return removeSpikeNoise(deduplicated);
 }
 
 // --- 6. DATA FETCHING ---
@@ -493,7 +609,7 @@ function renderChart(data) {
     
     try {
         // Prepare chart data
-        const { labels, datasets, timeRange, bucketMs, yScale } = prepareChartData(data);
+        const { labels, datasets, timeRange, bucketMs, yScale, displayData } = prepareChartData(data);
         
         // Create chart
         const ctx = canvas.getContext('2d');
@@ -507,7 +623,7 @@ function renderChart(data) {
             options: getChartOptions(timeRange, yScale)
         });
 
-        const insightLines = buildTrendInsights(aggregateDataByTimeBuckets(data, bucketMs), selectedSensors[0] || 'rpm');
+        const insightLines = buildTrendInsights(displayData, selectedSensors[0] || 'rpm');
         updateChartDescription(bucketMs, labels.length, insightLines);
         console.log('Chart rendered successfully');
         
@@ -709,7 +825,8 @@ function prepareChartData(data) {
             min: minVal - pad,
             max: maxVal + pad,
             range
-        }
+        },
+        displayData
     };
 }
 
