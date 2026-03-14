@@ -335,6 +335,102 @@ async function loadReportData() {
     }
 }
 
+
+function computeTimeRange(data) {
+    if (!Array.isArray(data) || data.length < 2) return 0;
+    const stamps = data
+        .map((d) => new Date(d.timestamp).getTime())
+        .filter((t) => Number.isFinite(t));
+    if (stamps.length < 2) return 0;
+    return Math.max(...stamps) - Math.min(...stamps);
+}
+
+function getBucketMsByRange(timeRange) {
+    const hour = 60 * 60 * 1000;
+    if (timeRange > 90 * 24 * hour) return 12 * hour;
+    if (timeRange > 30 * 24 * hour) return 6 * hour;
+    if (timeRange > 7 * 24 * hour) return 2 * hour;
+    if (timeRange > 24 * hour) return 30 * 60 * 1000;
+    return 5 * 60 * 1000;
+}
+
+function aggregateDataByTimeBuckets(data, bucketMs) {
+    if (!Array.isArray(data) || !data.length || !bucketMs) return data || [];
+
+    const sorted = [...data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const buckets = new Map();
+
+    sorted.forEach((row) => {
+        const ts = new Date(row.timestamp).getTime();
+        if (!Number.isFinite(ts)) return;
+        const bucketStart = Math.floor(ts / bucketMs) * bucketMs;
+        const key = String(bucketStart);
+
+        if (!buckets.has(key)) {
+            buckets.set(key, { timestamp: new Date(bucketStart).toISOString(), count: 0, sums: {} });
+        }
+
+        const b = buckets.get(key);
+        b.count += 1;
+
+        Object.keys(SENSORS).forEach((sensorKey) => {
+            const v = Number(row[sensorKey]);
+            if (Number.isFinite(v)) {
+                b.sums[sensorKey] = (b.sums[sensorKey] || 0) + v;
+            }
+        });
+    });
+
+    const aggregated = [];
+    buckets.forEach((b) => {
+        const row = { timestamp: b.timestamp };
+        Object.keys(SENSORS).forEach((sensorKey) => {
+            if (b.sums[sensorKey] != null) {
+                row[sensorKey] = b.sums[sensorKey] / b.count;
+            }
+        });
+        aggregated.push(row);
+    });
+
+    return aggregated.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+
+function movingAverage(values, windowSize) {
+    if (!Array.isArray(values) || values.length === 0 || windowSize <= 1) return values;
+    const out = [];
+    for (let i = 0; i < values.length; i++) {
+        const start = Math.max(0, i - windowSize + 1);
+        let sum = 0;
+        let count = 0;
+        for (let j = start; j <= i; j++) {
+            const v = Number(values[j]);
+            if (Number.isFinite(v)) {
+                sum += v;
+                count += 1;
+            }
+        }
+        out.push(count ? sum / count : 0);
+    }
+    return out;
+}
+
+function buildAnalysisRows(data, sensorKey) {
+    const timeRange = computeTimeRange(data);
+    const bucketMs = getBucketMsByRange(timeRange);
+    const aggregated = aggregateDataByTimeBuckets(data, bucketMs)
+        .filter((row) => Number.isFinite(Number(row[sensorKey])));
+
+    const maxRows = 1200;
+    const reduced = aggregated.length > maxRows
+        ? aggregated.filter((_, i) => i % Math.ceil(aggregated.length / maxRows) === 0)
+        : aggregated;
+
+    return reduced.map((row) => ({
+        timestamp: row.timestamp,
+        [sensorKey]: row[sensorKey]
+    }));
+}
+
 // --- 7. CHART FUNCTIONS (IMPROVED) ---
 function renderChart(data) {
     console.log('Rendering chart with', data.length, 'data points');
@@ -426,7 +522,7 @@ async function renderFftAnalysis(data) {
         const response = await fetch('/api/reports/analysis', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rows: data || [], sensor: sensorKey, maxPoints: 300 })
+            body: JSON.stringify({ rows: buildAnalysisRows(data || [], sensorKey), sensor: sensorKey, maxPoints: 300 })
         });
 
         if (!response.ok) {
@@ -513,33 +609,18 @@ function formatTimestampLabel(timestamp, timeRange) {
 }
 
 function prepareChartData(data) {
-    // Sort data by timestamp
     const sortedData = [...data].sort((a, b) => 
         new Date(a.timestamp) - new Date(b.timestamp)
     );
-    
-    // Calculate time range for scaling
-    const timestamps = sortedData.map(d => new Date(d.timestamp));
-    const minTime = new Date(Math.min(...timestamps));
-    const maxTime = new Date(Math.max(...timestamps));
-    const timeRange = maxTime - minTime;
-    
-    // Downsample based on time range
-    let displayData = sortedData;
-    const dataPoints = sortedData.length;
-    
-    // Adjust sampling based on time range
-    let sampleFactor = 1;
-    if (timeRange > 7 * 24 * 60 * 60 * 1000) { // > 1 week
-        sampleFactor = Math.ceil(dataPoints / 500);
-    } else if (timeRange > 24 * 60 * 60 * 1000) { // > 1 day
-        sampleFactor = Math.ceil(dataPoints / 1000);
-    } else {
-        sampleFactor = Math.ceil(dataPoints / 2000);
-    }
-    
-    if (sampleFactor > 1) {
-        displayData = sortedData.filter((_, index) => index % sampleFactor === 0);
+
+    const timeRange = computeTimeRange(sortedData);
+    const bucketMs = getBucketMsByRange(timeRange);
+    let displayData = aggregateDataByTimeBuckets(sortedData, bucketMs);
+
+    const maxPoints = 900;
+    if (displayData.length > maxPoints) {
+        const step = Math.ceil(displayData.length / maxPoints);
+        displayData = displayData.filter((_, index) => index % step === 0);
     }
     
     // Prepare datasets based on selected sensors
@@ -547,7 +628,8 @@ function prepareChartData(data) {
         .filter(sensorKey => SENSORS[sensorKey])
         .map((sensorKey, index) => {
             const config = SENSORS[sensorKey];
-            const values = displayData.map(d => d[sensorKey] || 0);
+            let values = displayData.map(d => d[sensorKey] || 0);
+            values = movingAverage(values, Math.max(3, Math.min(15, Math.floor(values.length / 24) || 3)));
             
             return {
                 label: config.name,
