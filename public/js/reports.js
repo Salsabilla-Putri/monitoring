@@ -21,7 +21,7 @@ const SENSORS = {
 
 let myChart = null;
 let currentData = [];
-let selectedSensors = ['rpm', 'volt']; // Default sensors to show
+let selectedSensors = ['rpm']; // Default sensor to show
 
 // --- 1. CHART MANAGEMENT ---
 function destroyChart() {
@@ -106,68 +106,55 @@ function initDatePickers() {
 
 // --- 4. SENSOR SELECTOR (untuk pilih sensor di chart) ---
 function initSensorSelector() {
-    // Buat selector sensor untuk chart
     const chartHeader = document.querySelector('.chart-header');
-    if (chartHeader) {
-        const sensorSelector = document.createElement('div');
-        sensorSelector.className = 'sensor-selector';
-        sensorSelector.style.cssText = `
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-            flex-wrap: wrap;
-        `;
-        
-        // Tambahkan beberapa sensor default
-        const defaultSensors = [
-            { key: 'rpm', name: 'RPM' },
-            { key: 'volt', name: 'Voltage' },
-            { key: 'temp', name: 'Temperature' },
-            { key: 'fuel', name: 'Fuel' }
-        ];
-        
-        defaultSensors.forEach(sensor => {
-            const btn = document.createElement('button');
-            btn.className = 'sensor-selector-btn';
-            btn.dataset.sensor = sensor.key;
-            btn.innerHTML = `<i class="${SENSORS[sensor.key]?.icon || 'fas fa-chart-line'}"></i> ${sensor.name}`;
-            btn.style.cssText = `
-                padding: 6px 12px;
-                border: 1px solid #d0d7e1;
-                border-radius: 4px;
-                background: ${selectedSensors.includes(sensor.key) ? '#1745a5' : '#f1f5f9'};
-                color: ${selectedSensors.includes(sensor.key) ? 'white' : '#0f172a'};
-                cursor: pointer;
-                font-size: 12px;
-                display: flex;
-                align-items: center;
-                gap: 5px;
-            `;
-            
-            btn.addEventListener('click', () => {
-                const sensorKey = btn.dataset.sensor;
-                const index = selectedSensors.indexOf(sensorKey);
-                
-                if (index === -1) {
-                    selectedSensors.push(sensorKey);
-                    btn.style.background = '#1745a5';
-                    btn.style.color = 'white';
-                } else {
-                    selectedSensors.splice(index, 1);
-                    btn.style.background = '#f1f5f9';
-                    btn.style.color = '#0f172a';
-                }
-                
-                // Update chart dengan sensor yang dipilih
-                if (currentData.length > 0) {
-                    renderChart(currentData);
-                }
-            });
-            
-            sensorSelector.appendChild(btn);
+    if (!chartHeader || chartHeader.querySelector('.sensor-selector')) return;
+
+    const sensorSelector = document.createElement('div');
+    sensorSelector.className = 'sensor-selector';
+
+    Object.entries(SENSORS).forEach(([sensorKey, sensor]) => {
+        const btn = document.createElement('button');
+        btn.className = 'sensor-selector-btn';
+        btn.dataset.sensor = sensorKey;
+        btn.innerHTML = `<i class="${sensor.icon || 'fas fa-chart-line'}"></i> ${sensor.name}`;
+
+        btn.addEventListener('click', () => {
+            selectSingleSensor(sensorKey);
         });
-        
-        chartHeader.appendChild(sensorSelector);
+
+        sensorSelector.appendChild(btn);
+    });
+
+    chartHeader.appendChild(sensorSelector);
+    syncSensorSelectorButtons();
+}
+
+function syncSensorSelectorButtons() {
+    document.querySelectorAll('.sensor-selector-btn').forEach((btn) => {
+        const isActive = selectedSensors.includes(btn.dataset.sensor);
+        btn.classList.toggle('active', isActive);
+    });
+}
+
+function selectSingleSensor(sensorKey, { focusChart = true } = {}) {
+    if (!SENSORS[sensorKey]) return;
+
+    selectedSensors = [sensorKey];
+    syncSensorSelectorButtons();
+
+    document.querySelectorAll('.sensor-card').forEach((card) => {
+        card.classList.toggle('active-sensor', card.dataset.sensor === sensorKey);
+    });
+
+    if (currentData.length > 0) {
+        renderChart(currentData);
+        const dateFrom = document.getElementById('dateFrom')?.value;
+        const dateTo = document.getElementById('dateTo')?.value;
+        updateChartTitle(dateFrom, dateTo);
+
+        if (focusChart) {
+            document.getElementById('chartContainer')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     }
 }
 
@@ -632,9 +619,11 @@ function updateChartTitle(startDate, endDate) {
                 day: 'numeric',
                 year: 'numeric'
             });
-            chartTitle.textContent = `Sensor Trends (${start} - ${end})`;
+            const activeSensor = SENSORS[selectedSensors[0]]?.name || 'Sensor';
+            chartTitle.textContent = `${activeSensor} Trend (${start} - ${end})`; 
         } else {
-            chartTitle.textContent = 'Sensor Trends (Last 24 Hours)';
+            const activeSensor = SENSORS[selectedSensors[0]]?.name || 'Sensor';
+            chartTitle.textContent = `${activeSensor} Trend (Last 24 Hours)`;
         }
     }
 }
@@ -849,6 +838,10 @@ function renderSensorCards(data) {
             </div>
         `;
         
+        card.addEventListener('click', () => {
+            selectSingleSensor(key);
+        });
+
         container.appendChild(card);
     });
     
