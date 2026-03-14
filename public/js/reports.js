@@ -392,6 +392,23 @@ function renderChart(data) {
     }
 }
 
+
+function formatTimestampLabel(timestamp, timeRange) {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return String(timestamp || '');
+
+    if (timeRange > 30 * 24 * 60 * 60 * 1000) {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+    }
+
+    if (timeRange > 24 * 60 * 60 * 1000) {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+            date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
 function prepareChartData(data) {
     // Sort data by timestamp
     const sortedData = [...data].sort((a, b) => 
@@ -459,31 +476,13 @@ function prepareChartData(data) {
     }
     
     return {
-        labels: displayData.map(d => d.timestamp),
+        labels: displayData.map((d) => formatTimestampLabel(d.timestamp, timeRange)),
         datasets: datasets,
         timeRange: timeRange
     };
 }
 
 function getChartOptions(timeRange) {
-    // Determine time unit based on time range
-    let timeUnit = 'hour';
-    let timeFormat = 'MMM d, HH:mm';
-    
-    if (timeRange > 30 * 24 * 60 * 60 * 1000) { // > 30 days
-        timeUnit = 'day';
-        timeFormat = 'MMM d';
-    } else if (timeRange > 7 * 24 * 60 * 60 * 1000) { // > 7 days
-        timeUnit = 'day';
-        timeFormat = 'MMM d';
-    } else if (timeRange > 24 * 60 * 60 * 1000) { // > 1 day
-        timeUnit = 'hour';
-        timeFormat = 'MMM d, HH:mm';
-    } else {
-        timeUnit = 'hour';
-        timeFormat = 'HH:mm';
-    }
-    
     return {
         responsive: true,
         maintainAspectRatio: false,
@@ -508,14 +507,7 @@ function getChartOptions(timeRange) {
                 callbacks: {
                     title: function(tooltipItems) {
                         if (tooltipItems.length > 0) {
-                            const date = new Date(tooltipItems[0].label);
-                            return date.toLocaleString('en-US', {
-                                weekday: 'short',
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                            });
+                            return tooltipItems[0].label;
                         }
                         return '';
                     },
@@ -535,17 +527,7 @@ function getChartOptions(timeRange) {
         },
         scales: {
             x: {
-                type: 'time',
-                time: {
-                    unit: timeUnit,
-                    displayFormats: {
-                        millisecond: 'HH:mm:ss',
-                        second: 'HH:mm:ss',
-                        minute: 'HH:mm',
-                        hour: timeFormat,
-                        day: 'MMM d'
-                    }
-                },
+                type: 'category',
                 grid: {
                     display: false
                 },
