@@ -149,7 +149,6 @@ function selectSingleSensor(sensorKey, { focusChart = true } = {}) {
 
     if (currentData.length > 0) {
         renderChart(currentData);
-        renderFftAnalysis(currentData);
         const dateFrom = document.getElementById('dateFrom')?.value;
         const dateTo = document.getElementById('dateTo')?.value;
         updateChartTitle(dateFrom, dateTo);
@@ -396,163 +395,6 @@ function renderChart(data) {
     }
 }
 
-
-
-
-function destroyFftChart() {
-    try {
-        if (fftChart) {
-            fftChart.destroy();
-            fftChart = null;
-        }
-    } catch (error) {
-        console.warn('Error destroying FFT chart:', error);
-        fftChart = null;
-    }
-}
-
-function nextPowerOfTwo(value) {
-    let v = 1;
-    while (v < value) v <<= 1;
-    return v;
-}
-
-function computeFftMagnitudes(signal) {
-    const n = signal.length;
-    const real = signal.slice();
-    const imag = new Array(n).fill(0);
-
-    let j = 0;
-    for (let i = 1; i < n; i++) {
-        let bit = n >> 1;
-        while (j & bit) {
-            j ^= bit;
-            bit >>= 1;
-        }
-        j ^= bit;
-        if (i < j) {
-            [real[i], real[j]] = [real[j], real[i]];
-            [imag[i], imag[j]] = [imag[j], imag[i]];
-        }
-    }
-
-    for (let len = 2; len <= n; len <<= 1) {
-        const angle = -2 * Math.PI / len;
-        const wLenCos = Math.cos(angle);
-        const wLenSin = Math.sin(angle);
-
-        for (let i = 0; i < n; i += len) {
-            let wCos = 1;
-            let wSin = 0;
-            for (let k = 0; k < len / 2; k++) {
-                const uReal = real[i + k];
-                const uImag = imag[i + k];
-                const vReal = real[i + k + len / 2] * wCos - imag[i + k + len / 2] * wSin;
-                const vImag = real[i + k + len / 2] * wSin + imag[i + k + len / 2] * wCos;
-
-                real[i + k] = uReal + vReal;
-                imag[i + k] = uImag + vImag;
-                real[i + k + len / 2] = uReal - vReal;
-                imag[i + k + len / 2] = uImag - vImag;
-
-                const nextCos = wCos * wLenCos - wSin * wLenSin;
-                wSin = wCos * wLenSin + wSin * wLenCos;
-                wCos = nextCos;
-            }
-        }
-    }
-
-    const half = n / 2;
-    const mags = [];
-    for (let i = 1; i < half; i++) {
-        mags.push(Math.sqrt(real[i] ** 2 + imag[i] ** 2) / half);
-    }
-    return mags;
-}
-
-function renderFftAnalysis(data) {
-    const summaryEl = document.getElementById('fftSummary');
-    const insightsEl = document.getElementById('fftInsights');
-    const canvas = document.getElementById('fftChart');
-    if (!canvas || !summaryEl || !insightsEl) return;
-
-    destroyFftChart();
-    insightsEl.innerHTML = '';
-
-    const sensorKey = selectedSensors[0] || 'rpm';
-    const sensor = SENSORS[sensorKey] || { name: sensorKey, unit: '' };
-    const rows = (data || []).filter((row) => row[sensorKey] != null && row.timestamp);
-
-    if (rows.length < 16) {
-        summaryEl.textContent = `FFT needs at least 16 samples for ${sensor.name}. Current: ${rows.length} sample(s).`;
-        return;
-    }
-
-    const sorted = rows.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    const values = sorted.map((r) => Number(r[sensorKey]) || 0);
-    const dt = [];
-    for (let i = 1; i < sorted.length; i++) {
-        const delta = (new Date(sorted[i].timestamp) - new Date(sorted[i - 1].timestamp)) / 1000;
-        if (delta > 0 && Number.isFinite(delta)) dt.push(delta);
-    }
-    const medianDt = dt.length ? dt.sort((a, b) => a - b)[Math.floor(dt.length / 2)] : 1;
-    const sampleRate = 1 / Math.max(medianDt, 1e-6);
-
-    const fftSize = Math.min(1024, nextPowerOfTwo(values.length));
-    const signal = new Array(fftSize).fill(0);
-    const offset = Math.max(0, values.length - fftSize);
-    for (let i = 0; i < fftSize; i++) signal[i] = values[offset + i] || 0;
-
-    const mean = signal.reduce((a, b) => a + b, 0) / signal.length;
-    for (let i = 0; i < signal.length; i++) signal[i] -= mean;
-
-    const mags = computeFftMagnitudes(signal);
-    const freqs = mags.map((_, i) => ((i + 1) * sampleRate) / fftSize);
-
-    const points = freqs.map((freq, i) => ({ freq, amp: mags[i] }))
-        .filter((p) => Number.isFinite(p.freq) && Number.isFinite(p.amp));
-
-    const topPeaks = [...points]
-        .sort((a, b) => b.amp - a.amp)
-        .slice(0, 3);
-
-    summaryEl.textContent = `FFT of ${sensor.name} | Samples: ${fftSize} | Estimated sampling: ${sampleRate.toFixed(3)} Hz`;
-
-    topPeaks.forEach((peak, idx) => {
-        const cycPerMin = peak.freq * 60;
-        const el = document.createElement('div');
-        el.className = 'fft-pill';
-        el.innerHTML = `<strong>Peak ${idx + 1}</strong><br>${peak.freq.toFixed(3)} Hz (${cycPerMin.toFixed(1)} cyc/min)<br>Amp: ${peak.amp.toFixed(3)}`;
-        insightsEl.appendChild(el);
-    });
-
-    const chartPoints = points.slice(0, Math.min(points.length, 300));
-    fftChart = new Chart(canvas.getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: chartPoints.map((p) => p.freq.toFixed(3)),
-            datasets: [{
-                label: `${sensor.name} FFT Amplitude`,
-                data: chartPoints.map((p) => p.amp),
-                borderColor: sensor.color || '#1745a5',
-                backgroundColor: hexToRgba(sensor.color || '#1745a5', 0.12),
-                fill: true,
-                pointRadius: 0,
-                tension: 0.2,
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: true } },
-            scales: {
-                x: { title: { display: true, text: 'Frequency (Hz)' } },
-                y: { title: { display: true, text: 'Amplitude' } }
-            }
-        }
-    });
-}
 
 function formatTimestampLabel(timestamp, timeRange) {
     const date = new Date(timestamp);
@@ -936,9 +778,7 @@ function renderSensorCards(data) {
 
         const card = document.createElement('div');
         card.className = 'sensor-card';
-        card.dataset.sensor = key;
         card.style.setProperty('--sensor-accent', accentColor);
-        card.classList.toggle('active-sensor', selectedSensors.includes(key));
         
         card.innerHTML = `
             <div class="sensor-header">
