@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const mqtt = require('mqtt');
 const cors = require('cors');
 const path = require('path');
+const { spawnSync } = require('child_process');
 require('dotenv').config();
 
 const app = express();
@@ -411,6 +412,39 @@ app.delete('/api/maintenance/:id', async (req, res) => {
     }
 });
 // Tambahkan kode ini di dalam server.js (sebelum app.listen)
+
+
+
+app.post('/api/reports/analysis', async (req, res) => {
+    try {
+        const { rows, sensor, maxPoints } = req.body || {};
+        const payload = {
+            rows: Array.isArray(rows) ? rows : [],
+            sensor: sensor || 'rpm',
+            max_points: Number.isFinite(Number(maxPoints)) ? Number(maxPoints) : 300
+        };
+
+        const scriptPath = path.join(__dirname, 'scripts_report_analysis.py');
+        const proc = spawnSync('python3', [scriptPath], {
+            input: JSON.stringify(payload),
+            encoding: 'utf-8',
+            maxBuffer: 1024 * 1024 * 4
+        });
+
+        if (proc.error) {
+            return res.status(500).json({ success: false, error: proc.error.message });
+        }
+
+        if (proc.status !== 0) {
+            return res.status(500).json({ success: false, error: proc.stderr || proc.stdout || 'analysis failed' });
+        }
+
+        const parsed = JSON.parse(proc.stdout || '{}');
+        res.json({ success: parsed.ok !== false, data: parsed });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 // API Endpoint untuk mengambil data report dari collection MongoDB yang ditetapkan
 app.get('/api/reports', async (req, res) => {

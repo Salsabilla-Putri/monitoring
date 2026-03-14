@@ -149,6 +149,7 @@ function selectSingleSensor(sensorKey, { focusChart = true } = {}) {
 
     if (currentData.length > 0) {
         renderChart(currentData);
+        renderFftAnalysis(currentData);
         const dateFrom = document.getElementById('dateFrom')?.value;
         const dateTo = document.getElementById('dateTo')?.value;
         updateChartTitle(dateFrom, dateTo);
@@ -395,6 +396,105 @@ function renderChart(data) {
     }
 }
 
+
+
+
+function destroyFftChart() {
+    try {
+        if (fftChart) {
+            fftChart.destroy();
+            fftChart = null;
+        }
+    } catch (error) {
+        console.warn('Error destroying FFT chart:', error);
+        fftChart = null;
+    }
+}
+
+async function renderFftAnalysis(data) {
+    const summaryEl = document.getElementById('fftSummary');
+    const insightsEl = document.getElementById('fftInsights');
+    const canvas = document.getElementById('fftChart');
+    if (!canvas || !summaryEl || !insightsEl) return;
+
+    destroyFftChart();
+    insightsEl.innerHTML = '';
+
+    const sensorKey = selectedSensors[0] || 'rpm';
+
+    try {
+        const response = await fetch('/api/reports/analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rows: data || [], sensor: sensorKey, maxPoints: 300 })
+        });
+
+        if (!response.ok) {
+            throw new Error(`FFT API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const payload = result?.data || {};
+        summaryEl.textContent = payload.summary || 'FFT summary unavailable.';
+
+        const stats = payload.stats || {};
+        const peaks = payload.peaks || [];
+        const spectrum = payload.spectrum || [];
+
+        if (stats.count != null) {
+            const statsEl = document.createElement('div');
+            statsEl.className = 'fft-pill';
+            statsEl.innerHTML = `<strong>Stats</strong><br>Count: ${stats.count}<br>Mean: ${(stats.mean ?? 0).toFixed(2)}<br>Trend: ${stats.trend || 'n/a'}`;
+            insightsEl.appendChild(statsEl);
+        }
+
+        peaks.forEach((peak, idx) => {
+            const cycPerMin = (peak.freq || 0) * 60;
+            const el = document.createElement('div');
+            el.className = 'fft-pill';
+            el.innerHTML = `<strong>Peak ${idx + 1}</strong><br>${(peak.freq || 0).toFixed(3)} Hz (${cycPerMin.toFixed(1)} cyc/min)<br>Amp: ${(peak.amp || 0).toFixed(3)}`;
+            insightsEl.appendChild(el);
+        });
+
+        if (!spectrum.length) {
+            return;
+        }
+
+        const sensor = SENSORS[sensorKey] || { name: sensorKey, color: '#1745a5' };
+        fftChart = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: spectrum.map((p) => (p.freq || 0).toFixed(3)),
+                datasets: [{
+                    label: `${sensor.name} FFT Amplitude`,
+                    data: spectrum.map((p) => p.amp || 0),
+                    borderColor: sensor.color || '#1745a5',
+                    backgroundColor: hexToRgba(sensor.color || '#1745a5', 0.12),
+                    fill: true,
+                    pointRadius: 0,
+                    tension: 0.2,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true } },
+                scales: {
+                    x: { title: { display: true, text: 'Frequency (Hz)' } },
+                    y: { title: { display: true, text: 'Amplitude' } }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('FFT analysis error:', error);
+        summaryEl.textContent = 'Failed to calculate FFT analysis.';
+        const el = document.createElement('div');
+        el.className = 'fft-pill';
+        el.textContent = error.message;
+        insightsEl.appendChild(el);
+    }
+}
 
 function formatTimestampLabel(timestamp, timeRange) {
     const date = new Date(timestamp);
@@ -778,7 +878,9 @@ function renderSensorCards(data) {
 
         const card = document.createElement('div');
         card.className = 'sensor-card';
+        card.dataset.sensor = key;
         card.style.setProperty('--sensor-accent', accentColor);
+        card.classList.toggle('active-sensor', selectedSensors.includes(key));
         
         card.innerHTML = `
             <div class="sensor-header">
