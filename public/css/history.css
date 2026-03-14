@@ -82,3 +82,53 @@ tr, td { font-size: var(--text-base-size); color: #000000; }
     .history-summary { grid-template-columns: 1fr 1fr; }
     table { display: block; overflow-x: auto; }
 }
+
+.ai-insight-card {
+    margin-top: 16px;
+    border: 1px solid #dbeafe;
+    background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+
+.ai-insight-title {
+    font-weight: 700;
+    color: #1e3a8a;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ai-insight-list {
+    margin: 0;
+    padding-left: 18px;
+    color: #1f2937;
+    line-height: 1.5;
+    font-size: var(--text-base-size);
+}
+
+.ai-insight-list li + li {
+    margin-top: 5px;
+}
+
+
+.chart-wrapper {
+    height: 350px;
+    position: relative;
+}
+
+.chart-state-message {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 18px;
+    color: #334155;
+    background: rgba(248, 250, 252, 0.92);
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    font-weight: 600;
+}

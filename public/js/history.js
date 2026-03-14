@@ -8,6 +8,7 @@ let filteredRows = [];
 let currentPage = 1;
 const itemsPerPage = 20;
 let myChart = null;
+const MIN_CHART_SAMPLES = 30;
 
 // Parameter Config (Satuan & Warna untuk Grafik)
 const PARAMS = {
@@ -41,7 +42,8 @@ function updateDateInputs(val) {
     } else if (val === 'custom') {
         return; // User set manual
     } else {
-        const days = parseInt(val) === 24 ? 30 : parseInt(val); 
+        const days = parseInt(val, 10);
+        if (!Number.isFinite(days)) return;
         start.setDate(start.getDate() - days);
     }
 
@@ -102,13 +104,20 @@ async function loadDataFromAPI() {
 
 function updateSummaryTimeRange(startStr, endStr) {
     const el = document.getElementById('dataPeriod');
-    if (!startStr || !endStr) { el.innerText = "All Time"; return; }
+    if (!startStr || !endStr) {
+        el.innerText = 'All Time';
+        return;
+    }
+
     const start = new Date(startStr);
     const end = new Date(endStr);
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-    // Jika range <= 1 hari, tampilkan '24 Hours'
-    el.innerText = diffDays <= 1 ? "24 Hours" : `${diffDays} Days`;
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    const diffMs = Math.max(0, end.getTime() - start.getTime());
+    const diffHours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)));
+
+    el.innerText = diffHours < 48 ? `${diffHours} Hours` : `${Math.ceil(diffHours / 24)} Days`;
 }
 
 // --- 2. DATA PROCESSING ---
@@ -218,8 +227,8 @@ function changePage(dir) {
 }
 
 function resetFilters() {
-    updateDateInputs('24');
-    document.getElementById('timeRange').value = '24';
+    updateDateInputs('30');
+    document.getElementById('timeRange').value = '30';
     document.getElementById('paramFilter').value = 'all';
     document.getElementById('statusFilter').value = 'all';
     document.getElementById('searchQuery').value = '';
@@ -274,126 +283,220 @@ function downsampleData(data, targetPoints = 60) {
     return sampled;
 }
 
+
+function calculateSensorStats(values) {
+    if (!values.length) return null;
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const avg = values.reduce((acc, val) => acc + val, 0) / values.length;
+    const first = values[0];
+    const last = values[values.length - 1];
+    const changePct = first === 0 ? 0 : ((last - first) / Math.abs(first)) * 100;
+
+    return {
+        min,
+        max,
+        avg,
+        first,
+        last,
+        changePct,
+        span: max - min
+    };
+}
+
+function buildAIInsights(seriesByParam, pointCount) {
+    const insights = [];
+
+    if (!pointCount) {
+        insights.push('Data tren tidak tersedia pada range ini. Coba perluas rentang waktu untuk analisis mesin.');
+        return insights;
+    }
+
+    const rpmStats = calculateSensorStats(seriesByParam.rpm || []);
+    const voltStats = calculateSensorStats(seriesByParam.volt || []);
+    const freqStats = calculateSensorStats(seriesByParam.freq || []);
+    const coolantStats = calculateSensorStats(seriesByParam.coolant || []);
+    const fuelStats = calculateSensorStats(seriesByParam.fuel || []);
+
+    if (rpmStats) {
+        const rpmTrend = rpmStats.changePct > 8 ? 'naik' : (rpmStats.changePct < -8 ? 'turun' : 'stabil');
+        insights.push(`RPM cenderung ${rpmTrend} (${rpmStats.first.toFixed(0)} → ${rpmStats.last.toFixed(0)}). Variasi ${rpmStats.span.toFixed(0)} RPM menandakan ${rpmStats.span > 900 ? 'beban mesin berubah cukup agresif' : 'pembebanan mesin relatif terkendali'}.`);
+    }
+
+    if (voltStats && freqStats) {
+        const voltageStable = voltStats.min >= 200 && voltStats.max <= 240;
+        const freqStable = freqStats.min >= 48 && freqStats.max <= 52;
+        insights.push(`Kualitas listrik ${voltageStable && freqStable ? 'stabil' : 'perlu perhatian'}: tegangan ${voltStats.min.toFixed(1)}-${voltStats.max.toFixed(1)} V dan frekuensi ${freqStats.min.toFixed(1)}-${freqStats.max.toFixed(1)} Hz.`);
+    }
+
+    if (coolantStats) {
+        insights.push(coolantStats.max >= 95
+            ? `Temperatur coolant sempat mencapai ${coolantStats.max.toFixed(1)}°C (zona tinggi). Rekomendasi: cek sistem pendingin dan kebersihan radiator.`
+            : `Temperatur coolant berada di ${coolantStats.min.toFixed(1)}-${coolantStats.max.toFixed(1)}°C, masih dalam kisaran operasi aman.`);
+    }
+
+    if (fuelStats) {
+        insights.push(fuelStats.last < 30
+            ? `Fuel level tersisa ${fuelStats.last.toFixed(1)}%. Jadwalkan pengisian agar operasi tidak terganggu.`
+            : `Fuel level akhir ${fuelStats.last.toFixed(1)}% dengan rata-rata ${fuelStats.avg.toFixed(1)}%. Cadangan bahan bakar masih memadai.`);
+    }
+
+    if (insights.length === 0) {
+        insights.push('Data sensor belum cukup untuk menyusun insight kondisi mesin.');
+    }
+
+    return insights;
+}
+
+
+
+function setChartStateMessage(message = '') {
+    const messageEl = document.getElementById('chartStateMessage');
+    if (!messageEl) return;
+
+    if (!message) {
+        messageEl.hidden = true;
+        messageEl.innerText = '';
+        return;
+    }
+
+    messageEl.hidden = false;
+    messageEl.innerText = message;
+}
+
+function renderSampleWarning(currentSamples) {
+    renderAIInsights([
+        `Data pada rentang waktu ini baru ${currentSamples} sampel. Grafik & analisis AI membutuhkan minimal ${MIN_CHART_SAMPLES} sampel agar tren lebih akurat.`
+    ]);
+}
+
+function renderAIInsights(insights) {
+    const listEl = document.getElementById('aiInsightList');
+    if (!listEl) return;
+    listEl.innerHTML = insights.map((item) => `<li>${item}</li>`).join('');
+}
+
 function updateChart() {
-    const ctx = document.getElementById('historyChart').getContext('2d');
+    const canvas = document.getElementById('historyChart');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
     if (myChart) myChart.destroy();
 
-    // 1. Tentukan Range Waktu dari Filter
     const dateFromVal = document.getElementById('dateFrom').value;
     const dateToVal = document.getElementById('dateTo').value;
     const paramFilter = document.getElementById('paramFilter').value;
 
-    let minTime, maxTime, diffHours = 24; // Default 24 jam
+    let minTime = null;
+    let maxTime = null;
 
     if (dateFromVal && dateToVal) {
-        const start = new Date(dateFromVal);
-        const end = new Date(dateToVal);
-        start.setHours(0,0,0,0);
-        end.setHours(23,59,59,999);
-        
-        minTime = start.getTime();
-        maxTime = end.getTime();
-        diffHours = (maxTime - minTime) / (1000 * 3600);
+        const startDate = new Date(dateFromVal);
+        const endDate = new Date(dateToVal);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+
+        minTime = startDate.getTime();
+        maxTime = endDate.getTime();
     }
 
-    // 2. Logic Dinamis Sumbu X
-    // Jika <= 24 jam, tampilkan Jam (HH:mm)
-    // Jika > 24 jam, tampilkan Tanggal (dd MMM)
-    let timeUnit = 'hour';
-    let displayFormat = 'HH:mm'; 
-    let tooltipFormat = 'dd MMM HH:mm';
-    
-    if (diffHours > 24) {
-        timeUnit = 'day';
-        displayFormat = 'dd MMM'; // Contoh: 10 Dec
-    }
+    let chartData = [...rawApiData].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    // 3. Siapkan Data (Sort -> Filter -> Smooth)
-    let chartData = [...rawApiData].sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
-    if (minTime && maxTime) {
-        chartData = chartData.filter(d => {
+    if (minTime !== null && maxTime !== null) {
+        chartData = chartData.filter((d) => {
             const t = new Date(d.timestamp).getTime();
             return t >= minTime && t <= maxTime;
         });
     }
 
-    // Lakukan Smoothing (Rata-rata 60 titik)
-    const smoothData = downsampleData(chartData, 60);
-
-    // 4. Siapkan Datasets Berdasarkan Filter
-    let datasets = [];
-    
-    if (paramFilter === 'all') {
-        // Jika ALL: Tampilkan RPM dan Voltage sebagai default view
+    if (!chartData.length) {
+        setChartStateMessage('Tidak ada data pada rentang waktu terpilih.');
+        renderAIInsights(['Tidak ada data pada rentang waktu terpilih.']);
         return;
-    } else {
-        // Jika Parameter Spesifik Dipilih (Fuel, Temp, Power, dll)
-        const conf = PARAMS[paramFilter];
-        const color = conf.color || '#1745a5';
-        
-        datasets = [{
-            label: `${paramFilter.toUpperCase()} (${conf.unit || ''})`,
-            data: smoothData.map(d => ({ x: d.timestamp, y: d[paramFilter] })), // Ambil data sesuai param
-            borderColor: color,
-            backgroundColor: color + '20', // Tambah transparansi hex
-            yAxisID: 'y', 
-            fill: true, 
-            tension: 0.4, 
-            pointRadius: 3, // Titik lebih jelas jika single param
-            borderWidth: 2
-        }];
     }
 
-    // 5. Render Grafik
+    if (chartData.length < MIN_CHART_SAMPLES) {
+        setChartStateMessage(`Data belum cukup untuk grafik. Minimal ${MIN_CHART_SAMPLES} sampel, saat ini ${chartData.length} sampel.`);
+        renderSampleWarning(chartData.length);
+        return;
+    }
+
+    setChartStateMessage('');
+
+    const diffMs = Math.max(1, (maxTime ?? new Date(chartData[chartData.length - 1].timestamp).getTime()) - (minTime ?? new Date(chartData[0].timestamp).getTime()));
+    const diffHours = diffMs / (1000 * 3600);
+
+    let timeUnit = 'hour';
+    if (diffHours <= 8) timeUnit = 'minute';
+    else if (diffHours > 48) timeUnit = 'day';
+
+    const targetPoints = Math.max(MIN_CHART_SAMPLES, Math.min(120, chartData.length));
+    const smoothData = downsampleData(chartData, targetPoints);
+
+    const visibleParams = paramFilter === 'all'
+        ? ['rpm', 'volt', 'freq']
+        : [paramFilter];
+
+    const datasets = visibleParams.map((key) => {
+        const conf = PARAMS[key] || { unit: '', color: '#1745a5' };
+        return {
+            label: `${key.toUpperCase()}${conf.unit ? ` (${conf.unit})` : ''}`,
+            data: smoothData
+                .filter((row) => row[key] !== null && row[key] !== undefined)
+                .map((row) => ({ x: row.timestamp, y: row[key] })),
+            borderColor: conf.color,
+            backgroundColor: `${conf.color}22`,
+            borderWidth: 2,
+            tension: 0.35,
+            pointRadius: paramFilter === 'all' ? 1.5 : 2.5,
+            fill: false
+        };
+    });
+
     myChart = new Chart(ctx, {
         type: 'line',
-        data: { datasets: datasets },
+        data: { datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
-            plugins: { 
-                legend: { position: 'top' },
-                tooltip: {
-                    callbacks: {
-                        title: (ctx) => {
-                            const date = new Date(ctx[0].parsed.x);
-                            return date.toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-                        }
-                    }
-                }
+            plugins: {
+                legend: { position: 'top' }
             },
             scales: {
-                x: { 
-                    type: 'time', 
-                    time: { 
-                        unit: timeUnit, 
-                        displayFormats: { 
-                            hour: 'HH:mm', 
-                            day: 'dd MMM',
-                            minute: 'HH:mm'
+                x: {
+                    type: 'time',
+                    min: minTime ?? undefined,
+                    max: maxTime ?? undefined,
+                    time: {
+                        unit: timeUnit,
+                        displayFormats: {
+                            minute: 'HH:mm',
+                            hour: 'dd MMM HH:mm',
+                            day: 'dd MMM'
                         },
-                        tooltipFormat: tooltipFormat 
-                    }, 
-                    grid: { display: false },
-                    min: minTime, 
-                    max: maxTime 
+                        tooltipFormat: 'dd MMM yyyy HH:mm'
+                    },
+                    ticks: { maxRotation: 0, autoSkip: true },
+                    grid: { color: '#e2e8f0' }
                 },
-                y: { 
-                    position: 'left', 
-                    title: { display: true, text: paramFilter === 'all' ? 'RPM' : (PARAMS[paramFilter]?.unit || '') }, 
-                    beginAtZero: false 
-                },
-                y1: { 
-                    display: paramFilter === 'all', // Sumbu kanan hanya muncul jika 'All'
-                    position: 'right', 
-                    grid: { drawOnChartArea: false }, 
-                    title: { display: true, text: 'Voltage (V)' } 
+                y: {
+                    beginAtZero: false,
+                    grid: { color: '#e2e8f0' }
                 }
             }
         }
     });
+
+    const seriesByParam = {};
+    Object.keys(PARAMS).forEach((key) => {
+        seriesByParam[key] = chartData
+            .map((row) => Number(row[key]))
+            .filter((value) => Number.isFinite(value));
+    });
+
+    renderAIInsights(buildAIInsights(seriesByParam, chartData.length));
 }
 
 // --- INITIALIZATION ---
@@ -401,6 +504,6 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch('sidebar.html').then(r=>r.text()).then(h=>document.getElementById('sidebar-container').innerHTML=h);
     document.getElementById('userarea').querySelector('span').innerText = localStorage.getItem('username') || 'Pengguna';
 
-    updateDateInputs('24');
+    updateDateInputs('30');
     applyFilters(); // Load awal
 });
