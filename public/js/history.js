@@ -8,6 +8,7 @@ let filteredRows = [];
 let currentPage = 1;
 const itemsPerPage = 20;
 let myChart = null;
+const MIN_CHART_SAMPLES = 30;
 
 // Parameter Config (Satuan & Warna untuk Grafik)
 const PARAMS = {
@@ -348,6 +349,28 @@ function buildAIInsights(seriesByParam, pointCount) {
     return insights;
 }
 
+
+
+function setChartStateMessage(message = '') {
+    const messageEl = document.getElementById('chartStateMessage');
+    if (!messageEl) return;
+
+    if (!message) {
+        messageEl.hidden = true;
+        messageEl.innerText = '';
+        return;
+    }
+
+    messageEl.hidden = false;
+    messageEl.innerText = message;
+}
+
+function renderSampleWarning(currentSamples) {
+    renderAIInsights([
+        `Data pada rentang waktu ini baru ${currentSamples} sampel. Grafik & analisis AI membutuhkan minimal ${MIN_CHART_SAMPLES} sampel agar tren lebih akurat.`
+    ]);
+}
+
 function renderAIInsights(insights) {
     const listEl = document.getElementById('aiInsightList');
     if (!listEl) return;
@@ -388,9 +411,18 @@ function updateChart() {
     }
 
     if (!chartData.length) {
+        setChartStateMessage('Tidak ada data pada rentang waktu terpilih.');
         renderAIInsights(['Tidak ada data pada rentang waktu terpilih.']);
         return;
     }
+
+    if (chartData.length < MIN_CHART_SAMPLES) {
+        setChartStateMessage(`Data belum cukup untuk grafik. Minimal ${MIN_CHART_SAMPLES} sampel, saat ini ${chartData.length} sampel.`);
+        renderSampleWarning(chartData.length);
+        return;
+    }
+
+    setChartStateMessage('');
 
     const diffMs = Math.max(1, (maxTime ?? new Date(chartData[chartData.length - 1].timestamp).getTime()) - (minTime ?? new Date(chartData[0].timestamp).getTime()));
     const diffHours = diffMs / (1000 * 3600);
@@ -399,7 +431,8 @@ function updateChart() {
     if (diffHours <= 8) timeUnit = 'minute';
     else if (diffHours > 48) timeUnit = 'day';
 
-    const smoothData = downsampleData(chartData, 120);
+    const targetPoints = Math.max(MIN_CHART_SAMPLES, Math.min(120, chartData.length));
+    const smoothData = downsampleData(chartData, targetPoints);
 
     const visibleParams = paramFilter === 'all'
         ? ['rpm', 'volt', 'freq']

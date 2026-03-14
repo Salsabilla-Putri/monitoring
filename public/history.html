@@ -152,8 +152,15 @@
 
       <div class="history-card">
         <div class="card-header"><div class="card-title">Trend Visualization</div></div>
-        <div style="height: 350px;">
+        <div class="chart-wrapper">
           <canvas id="historyChart"></canvas>
+          <div id="chartStateMessage" class="chart-state-message" hidden></div>
+        </div>
+        <div id="aiInsight" class="ai-insight-card">
+          <div class="ai-insight-title"><i class="fas fa-robot"></i> Analisis AI Kondisi Mesin</div>
+          <ul id="aiInsightList" class="ai-insight-list">
+            <li>Memproses data tren sensor...</li>
+          </ul>
         </div>
         <div id="aiInsight" class="ai-insight-card">
           <div class="ai-insight-title"><i class="fas fa-robot"></i> Analisis AI Kondisi Mesin</div>
