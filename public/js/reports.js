@@ -221,28 +221,33 @@ async function loadReportData() {
         const dateFrom = document.getElementById('dateFrom');
         const dateTo = document.getElementById('dateTo');
         
-        let url = `${API_URL}?limit=5000`;
-        
+        let url = `${API_URL}`;
+        let requestLimit = 5000;
+
         // Build URL with date parameters
         if (dateFrom && dateTo && dateFrom.value && dateTo.value) {
             const startDate = new Date(dateFrom.value);
             startDate.setHours(0, 0, 0, 0);
-            
+
             const endDate = new Date(dateTo.value);
             endDate.setHours(23, 59, 59, 999);
-            
+
             // Validate date range
             if (endDate < startDate) {
                 showError('End date must be after start date');
                 return;
             }
-            
-            url += `&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
-            console.log('Fetching with dates:', startDate.toISOString(), 'to', endDate.toISOString());
+
+            const rangeDays = Math.max(1, Math.ceil((endDate - startDate) / (24 * 60 * 60 * 1000)));
+            requestLimit = Math.min(100000, Math.max(5000, rangeDays * 2880));
+
+            url += `?limit=${requestLimit}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
+            console.log('Fetching with dates:', startDate.toISOString(), 'to', endDate.toISOString(), 'limit:', requestLimit);
         } else {
             // Default to last 24 hours
-            url += '&hours=24';
-            console.log('Fetching last 24 hours');
+            requestLimit = 10000;
+            url += `?limit=${requestLimit}&hours=24`;
+            console.log('Fetching last 24 hours with limit:', requestLimit);
         }
         
         // Fetch data
@@ -415,7 +420,7 @@ function renderChart(data) {
     
     try {
         // Prepare chart data
-        const { labels, datasets, timeRange, bucketMs } = prepareChartData(data);
+        const { labels, datasets, timeRange, bucketMs, yScale } = prepareChartData(data);
         
         // Create chart
         const ctx = canvas.getContext('2d');
@@ -426,7 +431,7 @@ function renderChart(data) {
                 labels: labels,
                 datasets: datasets
             },
-            options: getChartOptions(timeRange)
+            options: getChartOptions(timeRange, yScale)
         });
 
         updateChartDescription(bucketMs);
@@ -609,11 +614,22 @@ function prepareChartData(data) {
         });
     }
     
+    const allValues = datasets.flatMap((ds) => ds.data).filter((v) => Number.isFinite(Number(v)));
+    const minVal = allValues.length ? Math.min(...allValues) : 0;
+    const maxVal = allValues.length ? Math.max(...allValues) : 1;
+    const range = Math.max(1, maxVal - minVal);
+    const pad = range * 0.15;
+
     return {
         labels: displayData.map((d) => formatTimestampLabel(d.timestamp, timeRange)),
         datasets: datasets,
         timeRange: timeRange,
-        bucketMs
+        bucketMs,
+        yScale: {
+            min: minVal - pad,
+            max: maxVal + pad,
+            range
+        }
     };
 }
 
@@ -632,7 +648,7 @@ function updateChartDescription(bucketMs) {
     desc.textContent = `Tren menampilkan nilai rata-rata per ${formatBucketLabel(bucketMs)} sesuai rentang waktu yang di-apply.`;
 }
 
-function getChartOptions(timeRange) {
+function getChartOptions(timeRange, yScale) {
     return {
         responsive: true,
         maintainAspectRatio: false,
@@ -712,13 +728,17 @@ function getChartOptions(timeRange) {
                 grid: {
                     color: 'rgba(0, 0, 0, 0.05)'
                 },
+                suggestedMin: yScale?.min,
+                suggestedMax: yScale?.max,
                 ticks: {
                     callback: function(value) {
-                        // Format numbers with appropriate precision
-                        if (value >= 1000) {
-                            return (value / 1000).toFixed(0) + 'k';
+                        const absValue = Math.abs(value);
+                        if (absValue >= 1000) {
+                            const decimals = (yScale?.range || 0) < 200 ? 1 : 0;
+                            return (value / 1000).toFixed(decimals) + 'k';
                         }
-                        return value.toFixed(0);
+                        const decimals = (yScale?.range || 0) < 20 ? 2 : ((yScale?.range || 0) < 200 ? 1 : 0);
+                        return Number(value).toFixed(decimals);
                     }
                 }
             }

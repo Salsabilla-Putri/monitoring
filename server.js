@@ -450,7 +450,7 @@ app.post('/api/reports/analysis', async (req, res) => {
 app.get('/api/reports', async (req, res) => {
     try {
         const parsedLimit = parseInt(req.query.limit, 10);
-        const limit = Number.isNaN(parsedLimit) ? 5000 : Math.max(1, Math.min(parsedLimit, 10000));
+        const limit = Number.isNaN(parsedLimit) ? 5000 : Math.max(1, Math.min(parsedLimit, 100000));
         const { hours, startDate, endDate } = req.query;
 
         const normalizeNumeric = (value) => {
