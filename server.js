@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const mqtt = require('mqtt');
 const cors = require('cors');
 const path = require('path');
+const { spawnSync } = require('child_process');
 require('dotenv').config();
 
 const app = express();
@@ -14,7 +15,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'login.html')); });
@@ -412,11 +413,44 @@ app.delete('/api/maintenance/:id', async (req, res) => {
 });
 // Tambahkan kode ini di dalam server.js (sebelum app.listen)
 
+
+
+app.post('/api/reports/analysis', async (req, res) => {
+    try {
+        const { rows, sensor, maxPoints } = req.body || {};
+        const payload = {
+            rows: Array.isArray(rows) ? rows : [],
+            sensor: sensor || 'rpm',
+            max_points: Number.isFinite(Number(maxPoints)) ? Number(maxPoints) : 300
+        };
+
+        const scriptPath = path.join(__dirname, 'scripts_report_analysis.py');
+        const proc = spawnSync('python3', [scriptPath], {
+            input: JSON.stringify(payload),
+            encoding: 'utf-8',
+            maxBuffer: 1024 * 1024 * 4
+        });
+
+        if (proc.error) {
+            return res.status(500).json({ success: false, error: proc.error.message });
+        }
+
+        if (proc.status !== 0) {
+            return res.status(500).json({ success: false, error: proc.stderr || proc.stdout || 'analysis failed' });
+        }
+
+        const parsed = JSON.parse(proc.stdout || '{}');
+        res.json({ success: parsed.ok !== false, data: parsed });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // API Endpoint untuk mengambil data report dari collection MongoDB yang ditetapkan
 app.get('/api/reports', async (req, res) => {
     try {
         const parsedLimit = parseInt(req.query.limit, 10);
-        const limit = Number.isNaN(parsedLimit) ? 5000 : Math.max(1, Math.min(parsedLimit, 10000));
+        const limit = Number.isNaN(parsedLimit) ? 5000 : Math.max(1, Math.min(parsedLimit, 100000));
         const { hours, startDate, endDate } = req.query;
 
         const normalizeNumeric = (value) => {
@@ -461,25 +495,23 @@ app.get('/api/reports', async (req, res) => {
             if (!Number.isNaN(h) && h > 0) {
                 timeFilter.$gte = new Date(Date.now() - h * 3600 * 1000);
             }
-            if (hours) {
-                const h = Number(hours);
-                if (!Number.isNaN(h) && h > 0) {
-                    return { start: new Date(Date.now() - h * 3600 * 1000), end: null };
-                }
+        }
+
+        const buildFieldCondition = (fieldName) =>
+            Object.keys(timeFilter).length ? { [fieldName]: timeFilter } : { [fieldName]: { $exists: true } };
+
+        const mergeUniqueRows = (rows) => {
+            const seen = new Set();
+            const out = [];
+            for (const row of rows) {
+                const ts = row.timestamp || row.createdAt || row.date || row.waktu || '';
+                const key = `${row._id || ''}|${ts}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push(row);
             }
-            return null;
+            return out;
         };
-
-        const buildDbTimeFilter = (fieldName) => {
-            if (!requestedRange) return {};
-            const clause = {};
-            if (requestedRange.start) clause.$gte = requestedRange.start;
-            if (requestedRange.end) clause.$lte = requestedRange.end;
-            return { [fieldName]: clause };
-        };
-
-        const buildMongoQuery = (fieldName) =>
-            Object.keys(timeFilter).length ? { [fieldName]: timeFilter } : {};
 
         let reports = [];
         const candidateCollections = ['reports', 'generatordatas', 'generator_data'];
@@ -492,15 +524,19 @@ app.get('/api/reports', async (req, res) => {
                 if (!existingNames.has(collectionName)) continue;
 
                 const collection = mongoose.connection.db.collection(collectionName);
-                const [byTimestamp, byCreatedAt, byDate] = await Promise.all([
-                    collection.find(buildMongoQuery('timestamp')).sort({ timestamp: -1 }).limit(limit).toArray(),
-                    collection.find(buildMongoQuery('createdAt')).sort({ createdAt: -1 }).limit(limit).toArray(),
-                    collection.find(buildMongoQuery('date')).sort({ date: -1 }).limit(limit).toArray()
-                ]);
+                const orConditions = [
+                    buildFieldCondition('timestamp'),
+                    buildFieldCondition('createdAt'),
+                    buildFieldCondition('date')
+                ];
 
-                const picked = byTimestamp.length ? byTimestamp : (byCreatedAt.length ? byCreatedAt : byDate);
-                if (picked.length) {
-                    reports = picked;
+                const docs = await collection.find({ $or: orConditions }).limit(limit * 3).toArray();
+                const merged = mergeUniqueRows(docs)
+                    .sort((a, b) => new Date(b.timestamp || b.createdAt || b.date || 0) - new Date(a.timestamp || a.createdAt || a.date || 0))
+                    .slice(0, limit);
+
+                if (merged.length) {
+                    reports = merged;
                     break;
                 }
             }
@@ -508,12 +544,12 @@ app.get('/api/reports', async (req, res) => {
 
         if (!reports.length) {
             const orConditions = Object.keys(timeFilter).length
-                ? [{ timestamp: timeFilter }, { createdAt: timeFilter }]
+                ? [{ timestamp: timeFilter }, { createdAt: timeFilter }, { date: timeFilter }]
                 : [];
 
             const fallbackQuery = orConditions.length ? { $or: orConditions } : {};
             reports = await GeneratorData.find(fallbackQuery)
-                .sort({ timestamp: -1 })
+                .sort({ timestamp: -1, createdAt: -1, date: -1 })
                 .limit(limit)
                 .lean();
         }
