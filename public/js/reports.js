@@ -43,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     initDatePickers();
     setupEventListeners();
-    initSensorSelector();
     loadReportData();
 });
 
@@ -105,59 +104,13 @@ function initDatePickers() {
     }
 }
 
-// --- 4. SENSOR SELECTOR (untuk pilih sensor di chart) ---
+// --- 4. SENSOR SELECTOR (legacy chart buttons removed) ---
 function initSensorSelector() {
-    const chartHeader = document.querySelector('.chart-header');
-    if (!chartHeader || chartHeader.querySelector('.sensor-selector')) return;
-
-    const sensorSelector = document.createElement('div');
-    sensorSelector.className = 'sensor-selector';
-
-    Object.entries(SENSORS).forEach(([sensorKey, sensor]) => {
-        const btn = document.createElement('button');
-        btn.className = 'sensor-selector-btn';
-        btn.dataset.sensor = sensorKey;
-        btn.innerHTML = `<i class="${sensor.icon || 'fas fa-chart-line'}"></i> ${sensor.name}`;
-
-        btn.addEventListener('click', () => {
-            selectSingleSensor(sensorKey);
-        });
-
-        sensorSelector.appendChild(btn);
-    });
-
-    chartHeader.appendChild(sensorSelector);
-    syncSensorSelectorButtons();
+    // Parameter buttons on chart header intentionally removed by request.
 }
 
 function syncSensorSelectorButtons() {
-    document.querySelectorAll('.sensor-selector-btn').forEach((btn) => {
-        const isActive = selectedSensors.includes(btn.dataset.sensor);
-        btn.classList.toggle('active', isActive);
-    });
-}
-
-function selectSingleSensor(sensorKey, { focusChart = true } = {}) {
-    if (!SENSORS[sensorKey]) return;
-
-    selectedSensors = [sensorKey];
-    syncSensorSelectorButtons();
-
-    document.querySelectorAll('.sensor-card').forEach((card) => {
-        card.classList.toggle('active-sensor', card.dataset.sensor === sensorKey);
-    });
-
-    if (currentData.length > 0) {
-        renderChart(currentData);
-        renderFftAnalysis(currentData);
-        const dateFrom = document.getElementById('dateFrom')?.value;
-        const dateTo = document.getElementById('dateTo')?.value;
-        updateChartTitle(dateFrom, dateTo);
-
-        if (focusChart) {
-            document.getElementById('chartContainer')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-    }
+    // no-op: chart header sensor buttons removed
 }
 
 // --- 5. EVENT LISTENERS ---
@@ -462,7 +415,7 @@ function renderChart(data) {
     
     try {
         // Prepare chart data
-        const { labels, datasets, timeRange } = prepareChartData(data);
+        const { labels, datasets, timeRange, bucketMs } = prepareChartData(data);
         
         // Create chart
         const ctx = canvas.getContext('2d');
@@ -475,7 +428,8 @@ function renderChart(data) {
             },
             options: getChartOptions(timeRange)
         });
-        
+
+        updateChartDescription(bucketMs);
         console.log('Chart rendered successfully');
         
     } catch (error) {
@@ -596,13 +550,8 @@ function formatTimestampLabel(timestamp, timeRange) {
     const date = new Date(timestamp);
     if (Number.isNaN(date.getTime())) return String(timestamp || '');
 
-    if (timeRange > 30 * 24 * 60 * 60 * 1000) {
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
-    }
-
-    if (timeRange > 24 * 60 * 60 * 1000) {
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
-            date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    if (timeRange >= 2 * 24 * 60 * 60 * 1000) {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
 
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -663,8 +612,24 @@ function prepareChartData(data) {
     return {
         labels: displayData.map((d) => formatTimestampLabel(d.timestamp, timeRange)),
         datasets: datasets,
-        timeRange: timeRange
+        timeRange: timeRange,
+        bucketMs
     };
+}
+
+function formatBucketLabel(bucketMs) {
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    if (!bucketMs || bucketMs <= 0) return '-';
+    if (bucketMs % (24 * hour) === 0) return `${bucketMs / (24 * hour)} day`;
+    if (bucketMs % hour === 0) return `${bucketMs / hour} hour`;
+    return `${Math.round(bucketMs / minute)} min`;
+}
+
+function updateChartDescription(bucketMs) {
+    const desc = document.getElementById('chartDescription');
+    if (!desc) return;
+    desc.textContent = `Tren menampilkan nilai rata-rata per ${formatBucketLabel(bucketMs)} sesuai rentang waktu yang di-apply.`;
 }
 
 function getChartOptions(timeRange) {
