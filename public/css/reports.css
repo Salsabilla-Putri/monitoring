@@ -138,12 +138,13 @@ body {
 }
 
 .sensor-card {
+    --sensor-accent: var(--primary);
     background: white;
     border-radius: 15px;
     padding: 25px;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
     transition: transform 0.3s, box-shadow 0.3s;
-    border-left: 5px solid var(--primary);
+    border-left: 5px solid var(--sensor-accent);
     position: relative;
     overflow: hidden;
     cursor: pointer;
@@ -169,7 +170,7 @@ body {
 }
 
 .sensor-name {
-    font-weight: 700; color: var(--primary); font-size: var(--text-md-size);
+    font-weight: 700; color: var(--sensor-accent); font-size: var(--text-md-size);
     display: flex; align-items: center; gap: 10px;
 }
 
@@ -198,10 +199,13 @@ body {
     padding-top: 15px; border-top: 1px solid #e2e8f0;
 }
 
+.current-value {
+    color: var(--sensor-accent);
+}
+
 .warning-indicator { display: flex; align-items: center; gap: 8px; font-size: var(--text-xs-size); font-weight: 600; }
 .warning-zero { color: var(--secondary); }
 .warning-nonzero { color: var(--danger); }
-.last-updated { font-size: 10px; color: var(--muted); }
 
 /* === FILTER SECTION === */
 .filter-section {

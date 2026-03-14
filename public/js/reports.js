@@ -316,17 +316,6 @@ async function loadReportData() {
         if ((result.success !== false) && rows) {
             currentData = normalizeReportRows(rows);
 
-            // Fallback: jika filter tanggal terlalu sempit/format DB berbeda,
-            // ambil data 30 hari terakhir agar page tetap menampilkan data.
-            if (currentData.length === 0 && dateFrom && dateTo && dateFrom.value && dateTo.value) {
-                const fallbackRes = await fetch(`${API_URL}?limit=5000&hours=720`);
-                if (fallbackRes.ok) {
-                    const fallbackJson = await fallbackRes.json();
-                    const fallbackRows = Array.isArray(fallbackJson) ? fallbackJson : (fallbackJson.data || []);
-                    currentData = normalizeReportRows(fallbackRows);
-                }
-            }
-            
             if (currentData.length > 0) {
                 updateOverview(currentData);
                 renderSensorCards(currentData);
@@ -807,9 +796,15 @@ function renderSensorCards(data) {
             statusClass = 'status-warning';
         }
         
+        const accentColor = statusClass === 'status-critical'
+            ? '#dc2626'
+            : statusClass === 'status-warning'
+                ? '#f97316'
+                : config.color;
+
         const card = document.createElement('div');
         card.className = 'sensor-card';
-        card.style.borderLeftColor = config.color;
+        card.style.setProperty('--sensor-accent', accentColor);
         
         card.innerHTML = `
             <div class="sensor-header">
@@ -817,7 +812,7 @@ function renderSensorCards(data) {
                     <div class="sensor-icon" style="background: ${config.color}20; color: ${config.color}">
                         <i class="${config.icon}"></i>
                     </div>
-                    <span>${config.name}</span>
+                    <span class="sensor-title-text">${config.name}</span>
                 </div>
                 <div class="sensor-status ${statusClass}">${status.toUpperCase()}</div>
             </div>
@@ -825,7 +820,7 @@ function renderSensorCards(data) {
             <div class="sensor-stats">
                 <div class="stat-item">
                     <div class="stat-label">CURRENT</div>
-                    <div class="stat-value" style="color: ${config.color};">
+                    <div class="stat-value current-value">
                         ${current.toFixed(1)}<small style="font-size: 12px;"> ${config.unit}</small>
                     </div>
                 </div>
@@ -850,9 +845,6 @@ function renderSensorCards(data) {
                 <div class="warning-indicator ${min === 0 ? 'warning-nonzero' : 'warning-zero'}">
                     <i class="fas fa-${min === 0 ? 'exclamation-triangle' : 'check-circle'}"></i>
                     ${values.length} readings
-                </div>
-                <div class="last-updated">
-                    Updated: ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                 </div>
             </div>
         `;
