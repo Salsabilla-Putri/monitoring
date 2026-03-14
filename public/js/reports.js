@@ -23,6 +23,7 @@ let myChart = null;
 let fftChart = null;
 let currentData = [];
 let selectedSensors = ['rpm']; // Default sensor to show
+let activeRange = { start: null, end: null };
 
 // --- 1. CHART MANAGEMENT ---
 function destroyChart() {
@@ -238,6 +239,9 @@ async function loadReportData() {
                 return;
             }
 
+            activeRange.start = startDate.getTime();
+            activeRange.end = endDate.getTime();
+
             const rangeDays = Math.max(1, Math.ceil((endDate - startDate) / (24 * 60 * 60 * 1000)));
             requestLimit = Math.min(100000, Math.max(5000, rangeDays * 2880));
 
@@ -247,6 +251,8 @@ async function loadReportData() {
             // Default to last 24 hours
             requestLimit = 10000;
             url += `?limit=${requestLimit}&hours=24`;
+            activeRange.start = null;
+            activeRange.end = null;
             console.log('Fetching last 24 hours with limit:', requestLimit);
         }
         
@@ -293,6 +299,65 @@ async function loadReportData() {
     }
 }
 
+
+
+function buildContinuousBuckets(aggregatedData, bucketMs, startMs, endMs) {
+    if (!Array.isArray(aggregatedData) || !bucketMs || !Number.isFinite(startMs) || !Number.isFinite(endMs)) return aggregatedData || [];
+
+    const byTs = new Map();
+    aggregatedData.forEach((row) => {
+        const t = new Date(row.timestamp).getTime();
+        if (Number.isFinite(t)) byTs.set(t, row);
+    });
+
+    const alignedStart = Math.floor(startMs / bucketMs) * bucketMs;
+    const alignedEnd = Math.floor(endMs / bucketMs) * bucketMs;
+    const rows = [];
+
+    for (let t = alignedStart; t <= alignedEnd; t += bucketMs) {
+        if (byTs.has(t)) {
+            rows.push(byTs.get(t));
+            continue;
+        }
+        const emptyRow = { timestamp: new Date(t).toISOString() };
+        Object.keys(SENSORS).forEach((key) => {
+            emptyRow[key] = null;
+        });
+        rows.push(emptyRow);
+    }
+
+    return rows;
+}
+
+function buildTrendInsights(displayData, sensorKey) {
+    const values = displayData
+        .map((row) => Number(row[sensorKey]))
+        .filter((v) => Number.isFinite(v));
+
+    if (!values.length) {
+        return ['Data belum cukup untuk analisis tren sensor pada rentang ini.'];
+    }
+
+    const first = values[0];
+    const last = values[values.length - 1];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    const trend = last > first ? 'naik' : (last < first ? 'turun' : 'stabil');
+
+    const insights = [
+        `${(SENSORS[sensorKey]?.name || sensorKey)} cenderung ${trend} (${first.toFixed(1)} → ${last.toFixed(1)}).`,
+        `Rentang nilai ${min.toFixed(1)} - ${max.toFixed(1)} dengan rata-rata ${avg.toFixed(1)}.`
+    ];
+
+    if (sensorKey === 'volt') {
+        insights.push(min >= 200 && max <= 240
+            ? 'Tegangan relatif stabil dalam rentang operasional.'
+            : 'Tegangan keluar dari rentang ideal, perlu pengecekan regulator/beban.');
+    }
+
+    return insights;
+}
 
 function computeTimeRange(data) {
     if (!Array.isArray(data) || data.length < 2) return 0;
@@ -380,8 +445,11 @@ function movingAverage(values, windowSize) {
 function buildAnalysisRows(data, sensorKey) {
     const timeRange = computeTimeRange(data);
     const bucketMs = getBucketMsByRange(timeRange);
-    const aggregated = aggregateDataByTimeBuckets(data, bucketMs)
-        .filter((row) => Number.isFinite(Number(row[sensorKey])));
+    let aggregated = aggregateDataByTimeBuckets(data, bucketMs);
+    if (Number.isFinite(activeRange.start) && Number.isFinite(activeRange.end)) {
+        aggregated = buildContinuousBuckets(aggregated, bucketMs, activeRange.start, activeRange.end);
+    }
+    aggregated = aggregated.filter((row) => Number.isFinite(Number(row[sensorKey])));
 
     const maxRows = 1200;
     const reduced = aggregated.length > maxRows
@@ -439,7 +507,8 @@ function renderChart(data) {
             options: getChartOptions(timeRange, yScale)
         });
 
-        updateChartDescription(bucketMs, labels.length);
+        const insightLines = buildTrendInsights(aggregateDataByTimeBuckets(data, bucketMs), selectedSensors[0] || 'rpm');
+        updateChartDescription(bucketMs, labels.length, insightLines);
         console.log('Chart rendered successfully');
         
     } catch (error) {
@@ -531,7 +600,7 @@ async function renderFftAnalysis(data) {
                     borderColor: sensor.color || '#1745a5',
                     backgroundColor: hexToRgba(sensor.color || '#1745a5', 0.12),
                     fill: true,
-                    pointRadius: 0,
+                    pointRadius: 1.5,
                     tension: 0.2,
                     borderWidth: 2
                 }]
@@ -576,6 +645,10 @@ function prepareChartData(data) {
     const bucketMs = getBucketMsByRange(timeRange);
     let displayData = aggregateDataByTimeBuckets(sortedData, bucketMs);
 
+    if (Number.isFinite(activeRange.start) && Number.isFinite(activeRange.end)) {
+        displayData = buildContinuousBuckets(displayData, bucketMs, activeRange.start, activeRange.end);
+    }
+
     const maxPoints = 900;
     if (displayData.length > maxPoints) {
         const step = Math.ceil(displayData.length / maxPoints);
@@ -587,8 +660,10 @@ function prepareChartData(data) {
         .filter(sensorKey => SENSORS[sensorKey])
         .map((sensorKey, index) => {
             const config = SENSORS[sensorKey];
-            let values = displayData.map(d => d[sensorKey] || 0);
-            values = movingAverage(values, Math.max(3, Math.min(15, Math.floor(values.length / 24) || 3)));
+            const values = displayData.map(d => {
+                const val = Number(d[sensorKey]);
+                return Number.isFinite(val) ? val : null;
+            });
             
             return {
                 label: config.name,
@@ -596,7 +671,7 @@ function prepareChartData(data) {
                 borderColor: config.color,
                 backgroundColor: hexToRgba(config.color, 0.1),
                 borderWidth: 2,
-                pointRadius: 0,
+                pointRadius: 1.5,
                 fill: index === 0, // Only fill first dataset
                 tension: 0.2,
                 yAxisID: `y${index === 0 ? '' : index + 1}`
@@ -608,7 +683,7 @@ function prepareChartData(data) {
         const config = SENSORS.rpm;
         datasets.push({
             label: config.name,
-            data: displayData.map(d => d.rpm || 0),
+            data: displayData.map(d => { const v = Number(d.rpm); return Number.isFinite(v) ? v : null; }),
             borderColor: config.color,
             backgroundColor: hexToRgba(config.color, 0.1),
             borderWidth: 2,
@@ -647,11 +722,12 @@ function formatBucketLabel(bucketMs) {
     return `${Math.round(bucketMs / minute)} min`;
 }
 
-function updateChartDescription(bucketMs, sampleCount) {
+function updateChartDescription(bucketMs, sampleCount, insights = []) {
     const desc = document.getElementById('chartDescription');
     if (!desc) return;
     const suffix = Number.isFinite(sampleCount) ? ` (samples: ${sampleCount})` : '';
-    desc.textContent = `Tren menampilkan nilai rata-rata per ${formatBucketLabel(bucketMs)} sesuai rentang waktu yang di-apply${suffix}.`;
+    const insightText = Array.isArray(insights) && insights.length ? ` | Insight: ${insights.join(' ')}` : '';
+    desc.textContent = `Tren menampilkan nilai rata-rata per ${formatBucketLabel(bucketMs)} sesuai rentang waktu yang di-apply${suffix}.${insightText}`;
 }
 
 function getChartOptions(timeRange, yScale) {

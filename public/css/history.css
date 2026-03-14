@@ -82,3 +82,8 @@ tr, td { font-size: var(--text-base-size); color: #000000; }
     .history-summary { grid-template-columns: 1fr 1fr; }
     table { display: block; overflow-x: auto; }
 }
+
+.value-cell { font-weight: 700; }
+.value-warning { color: #d97706; background: #fffbeb; }
+.value-critical { color: #b91c1c; background: #fef2f2; }
+.value-normal { color: #111827; }

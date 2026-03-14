@@ -6,8 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="js/auth-guard.js"></script>
   
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <link rel="stylesheet" href="sidebar.css">
@@ -75,7 +73,7 @@
                     <option value="yesterday">Yesterday</option>
                     <option value="today">Today</option>
                     <option value="7">Last 7 Days</option>
-                    <option value="24" selected>Last 30 Days</option> 
+                    <option value="30" selected>Last 30 Days</option> 
                 </select>
             </div>
 
@@ -150,11 +148,6 @@
         </div>
       </div>
 
-      <div class="history-card">
-        <div class="card-header"><div class="card-title">Trend Visualization</div></div>
-        <div style="height: 350px;">
-          <canvas id="historyChart"></canvas>
-        </div>
       </div>
     </div>
   </div>

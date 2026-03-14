@@ -8,6 +8,7 @@ let filteredRows = [];
 let currentPage = 1;
 const itemsPerPage = 20;
 let myChart = null;
+const MIN_CHART_SAMPLES = 30;
 
 // Parameter Config (Satuan & Warna untuk Grafik)
 const PARAMS = {
@@ -41,7 +42,8 @@ function updateDateInputs(val) {
     } else if (val === 'custom') {
         return; // User set manual
     } else {
-        const days = parseInt(val) === 24 ? 30 : parseInt(val); 
+        const days = parseInt(val, 10);
+        if (!Number.isFinite(days)) return;
         start.setDate(start.getDate() - days);
     }
 
@@ -102,13 +104,20 @@ async function loadDataFromAPI() {
 
 function updateSummaryTimeRange(startStr, endStr) {
     const el = document.getElementById('dataPeriod');
-    if (!startStr || !endStr) { el.innerText = "All Time"; return; }
+    if (!startStr || !endStr) {
+        el.innerText = 'All Time';
+        return;
+    }
+
     const start = new Date(startStr);
     const end = new Date(endStr);
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-    // Jika range <= 1 hari, tampilkan '24 Hours'
-    el.innerText = diffDays <= 1 ? "24 Hours" : `${diffDays} Days`;
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    const diffMs = Math.max(0, end.getTime() - start.getTime());
+    const diffHours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)));
+
+    el.innerText = diffHours < 48 ? `${diffHours} Hours` : `${Math.ceil(diffHours / 24)} Days`;
 }
 
 // --- 2. DATA PROCESSING ---
@@ -171,7 +180,6 @@ function processDataAndRender() {
     
     currentPage = 1;
     renderTable();
-    updateChart(); // Update Grafik
 }
 
 // --- 3. RENDER TABLE ---
@@ -195,7 +203,7 @@ function renderTable() {
             <td>${row.rawDate.toLocaleString('id-ID')}</td>
             <td>${row.generator}</td>
             <td>${row.label}</td>
-            <td>${Number(row.value).toFixed(1)}</td>
+            <td class="value-cell value-${row.status}">${Number(row.value).toFixed(1)}</td>
             <td>${row.unit}</td>
             <td><span class="status-badge status-${row.status}">${row.status}</span></td>
         `;
@@ -218,8 +226,8 @@ function changePage(dir) {
 }
 
 function resetFilters() {
-    updateDateInputs('24');
-    document.getElementById('timeRange').value = '24';
+    updateDateInputs('30');
+    document.getElementById('timeRange').value = '30';
     document.getElementById('paramFilter').value = 'all';
     document.getElementById('statusFilter').value = 'all';
     document.getElementById('searchQuery').value = '';
@@ -239,168 +247,14 @@ function exportCSV() {
     a.click();
 }
 
-// --- 4. CHART RENDER & LOGIC TREN (SMOOTHING & DYNAMIC X-AXIS) ---
 
-// Fungsi Downsampling: Merata-rata data agar grafik tidak "bergerigi"
-// Mengubah ribuan data menjadi ~60 titik data rata-rata
-function downsampleData(data, targetPoints = 60) {
-    if (data.length <= targetPoints) return data;
-
-    const sampled = [];
-    const blockSize = Math.ceil(data.length / targetPoints);
-    const paramKeys = Object.keys(PARAMS);
-
-    for (let i = 0; i < data.length; i += blockSize) {
-        const chunk = data.slice(i, i + blockSize);
-        
-        // Ambil timestamp tengah
-        const midTime = chunk[Math.floor(chunk.length / 2)].timestamp;
-        const entry = { timestamp: midTime };
-        
-        // Hitung rata-rata untuk SETIAP parameter yang ada di PARAMS
-        paramKeys.forEach(key => {
-            // Filter nilai yang valid (angka)
-            const validValues = chunk.filter(c => c[key] != null).map(c => Number(c[key]));
-            if (validValues.length > 0) {
-                const sum = validValues.reduce((a, b) => a + b, 0);
-                entry[key] = sum / validValues.length; // Average
-            } else {
-                entry[key] = null;
-            }
-        });
-
-        sampled.push(entry);
-    }
-    return sampled;
-}
-
-function updateChart() {
-    const ctx = document.getElementById('historyChart').getContext('2d');
-    if (myChart) myChart.destroy();
-
-    // 1. Tentukan Range Waktu dari Filter
-    const dateFromVal = document.getElementById('dateFrom').value;
-    const dateToVal = document.getElementById('dateTo').value;
-    const paramFilter = document.getElementById('paramFilter').value;
-
-    let minTime, maxTime, diffHours = 24; // Default 24 jam
-
-    if (dateFromVal && dateToVal) {
-        const start = new Date(dateFromVal);
-        const end = new Date(dateToVal);
-        start.setHours(0,0,0,0);
-        end.setHours(23,59,59,999);
-        
-        minTime = start.getTime();
-        maxTime = end.getTime();
-        diffHours = (maxTime - minTime) / (1000 * 3600);
-    }
-
-    // 2. Logic Dinamis Sumbu X
-    // Jika <= 24 jam, tampilkan Jam (HH:mm)
-    // Jika > 24 jam, tampilkan Tanggal (dd MMM)
-    let timeUnit = 'hour';
-    let displayFormat = 'HH:mm'; 
-    let tooltipFormat = 'dd MMM HH:mm';
-    
-    if (diffHours > 24) {
-        timeUnit = 'day';
-        displayFormat = 'dd MMM'; // Contoh: 10 Dec
-    }
-
-    // 3. Siapkan Data (Sort -> Filter -> Smooth)
-    let chartData = [...rawApiData].sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
-    if (minTime && maxTime) {
-        chartData = chartData.filter(d => {
-            const t = new Date(d.timestamp).getTime();
-            return t >= minTime && t <= maxTime;
-        });
-    }
-
-    // Lakukan Smoothing (Rata-rata 60 titik)
-    const smoothData = downsampleData(chartData, 60);
-
-    // 4. Siapkan Datasets Berdasarkan Filter
-    let datasets = [];
-    
-    if (paramFilter === 'all') {
-        // Jika ALL: Tampilkan RPM dan Voltage sebagai default view
-        return;
-    } else {
-        // Jika Parameter Spesifik Dipilih (Fuel, Temp, Power, dll)
-        const conf = PARAMS[paramFilter];
-        const color = conf.color || '#1745a5';
-        
-        datasets = [{
-            label: `${paramFilter.toUpperCase()} (${conf.unit || ''})`,
-            data: smoothData.map(d => ({ x: d.timestamp, y: d[paramFilter] })), // Ambil data sesuai param
-            borderColor: color,
-            backgroundColor: color + '20', // Tambah transparansi hex
-            yAxisID: 'y', 
-            fill: true, 
-            tension: 0.4, 
-            pointRadius: 3, // Titik lebih jelas jika single param
-            borderWidth: 2
-        }];
-    }
-
-    // 5. Render Grafik
-    myChart = new Chart(ctx, {
-        type: 'line',
-        data: { datasets: datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: { 
-                legend: { position: 'top' },
-                tooltip: {
-                    callbacks: {
-                        title: (ctx) => {
-                            const date = new Date(ctx[0].parsed.x);
-                            return date.toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: { 
-                    type: 'time', 
-                    time: { 
-                        unit: timeUnit, 
-                        displayFormats: { 
-                            hour: 'HH:mm', 
-                            day: 'dd MMM',
-                            minute: 'HH:mm'
-                        },
-                        tooltipFormat: tooltipFormat 
-                    }, 
-                    grid: { display: false },
-                    min: minTime, 
-                    max: maxTime 
-                },
-                y: { 
-                    position: 'left', 
-                    title: { display: true, text: paramFilter === 'all' ? 'RPM' : (PARAMS[paramFilter]?.unit || '') }, 
-                    beginAtZero: false 
-                },
-                y1: { 
-                    display: paramFilter === 'all', // Sumbu kanan hanya muncul jika 'All'
-                    position: 'right', 
-                    grid: { drawOnChartArea: false }, 
-                    title: { display: true, text: 'Voltage (V)' } 
-                }
-            }
-        }
-    });
-}
+// --- 4. HISTORY EXPORT ONLY (NO TREND CHART) ---
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
     fetch('sidebar.html').then(r=>r.text()).then(h=>document.getElementById('sidebar-container').innerHTML=h);
     document.getElementById('userarea').querySelector('span').innerText = localStorage.getItem('username') || 'Pengguna';
 
-    updateDateInputs('24');
+    updateDateInputs('30');
     applyFilters(); // Load awal
 });
