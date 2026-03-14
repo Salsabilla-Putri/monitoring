@@ -8,6 +8,7 @@ let filteredRows = [];
 let currentPage = 1;
 const itemsPerPage = 20;
 let myChart = null;
+let aiInsightList = [];
 
 // Parameter Config (Satuan & Warna untuk Grafik)
 const PARAMS = {
@@ -102,13 +103,23 @@ async function loadDataFromAPI() {
 
 function updateSummaryTimeRange(startStr, endStr) {
     const el = document.getElementById('dataPeriod');
-    if (!startStr || !endStr) { el.innerText = "All Time"; return; }
-    const start = new Date(startStr);
-    const end = new Date(endStr);
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-    // Jika range <= 1 hari, tampilkan '24 Hours'
-    el.innerText = diffDays <= 1 ? "24 Hours" : `${diffDays} Days`;
+    if (!startStr || !endStr) {
+        el.innerText = "All Time";
+        return;
+    }
+
+    const start = new Date(`${startStr}T00:00:00`);
+    const end = new Date(`${endStr}T23:59:59`);
+    const diffMs = end.getTime() - start.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    if (diffHours <= 24) {
+        el.innerText = "24 Hours";
+    } else if (diffHours < (24 * 7)) {
+        el.innerText = `${Math.ceil(diffHours)} Hours`;
+    } else {
+        el.innerText = `${Math.ceil(diffHours / 24)} Days`;
+    }
 }
 
 // --- 2. DATA PROCESSING ---
@@ -274,126 +285,214 @@ function downsampleData(data, targetPoints = 60) {
     return sampled;
 }
 
-function updateChart() {
-    const ctx = document.getElementById('historyChart').getContext('2d');
-    if (myChart) myChart.destroy();
 
-    // 1. Tentukan Range Waktu dari Filter
+function getChartTimeRange() {
     const dateFromVal = document.getElementById('dateFrom').value;
     const dateToVal = document.getElementById('dateTo').value;
-    const paramFilter = document.getElementById('paramFilter').value;
-
-    let minTime, maxTime, diffHours = 24; // Default 24 jam
 
     if (dateFromVal && dateToVal) {
-        const start = new Date(dateFromVal);
-        const end = new Date(dateToVal);
-        start.setHours(0,0,0,0);
-        end.setHours(23,59,59,999);
-        
-        minTime = start.getTime();
-        maxTime = end.getTime();
-        diffHours = (maxTime - minTime) / (1000 * 3600);
+        const start = new Date(`${dateFromVal}T00:00:00`);
+        const end = new Date(`${dateToVal}T23:59:59`);
+        const minTime = start.getTime();
+        const maxTime = end.getTime();
+        const diffHours = (maxTime - minTime) / (1000 * 3600);
+        return { minTime, maxTime, diffHours };
     }
 
-    // 2. Logic Dinamis Sumbu X
-    // Jika <= 24 jam, tampilkan Jam (HH:mm)
-    // Jika > 24 jam, tampilkan Tanggal (dd MMM)
+    if (rawApiData.length > 1) {
+        const sorted = [...rawApiData].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        const minTime = new Date(sorted[0].timestamp).getTime();
+        const maxTime = new Date(sorted[sorted.length - 1].timestamp).getTime();
+        const diffHours = (maxTime - minTime) / (1000 * 3600);
+        return { minTime, maxTime, diffHours };
+    }
+
+    return { minTime: undefined, maxTime: undefined, diffHours: 24 };
+}
+
+function buildAIInsights(dataInRange) {
+    const insights = [];
+
+    if (!dataInRange.length) {
+        insights.push('Belum ada data pada rentang waktu ini, silakan ubah filter tanggal untuk memulai analisis.');
+        return insights;
+    }
+
+    const latest = dataInRange[dataInRange.length - 1];
+    const trendWindow = Math.max(2, Math.floor(dataInRange.length * 0.2));
+
+    Object.entries(PARAMS).forEach(([key, conf]) => {
+        const values = dataInRange.map(d => Number(d[key])).filter(Number.isFinite);
+        if (values.length < 2) return;
+
+        const latestValue = values[values.length - 1];
+        const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
+        const recentSlice = values.slice(-trendWindow);
+        const startSlice = values.slice(0, trendWindow);
+        const recentAvg = recentSlice.reduce((a, b) => a + b, 0) / recentSlice.length;
+        const startAvg = startSlice.reduce((a, b) => a + b, 0) / startSlice.length;
+        const deltaPct = ((recentAvg - startAvg) / (Math.abs(startAvg) || 1)) * 100;
+
+        if (conf.warn && latestValue > conf.warn) {
+            insights.push(`${key.toUpperCase()} saat ini ${latestValue.toFixed(1)} ${conf.unit}, melewati ambang warning (${conf.warn} ${conf.unit}).`);
+        }
+
+        if (conf.max && latestValue > conf.max) {
+            insights.push(`${key.toUpperCase()} mencapai ${latestValue.toFixed(1)} ${conf.unit}, melampaui batas maksimum (${conf.max} ${conf.unit}) dan perlu inspeksi cepat.`);
+        }
+
+        if (conf.min && latestValue < conf.min) {
+            insights.push(`${key.toUpperCase()} berada di ${latestValue.toFixed(1)} ${conf.unit}, di bawah batas minimum (${conf.min} ${conf.unit}).`);
+        }
+
+        if (Math.abs(deltaPct) >= 15) {
+            const direction = deltaPct > 0 ? 'naik' : 'turun';
+            insights.push(`Tren ${key.toUpperCase()} ${direction} ${Math.abs(deltaPct).toFixed(1)}% dibanding awal periode (rata-rata ${avgValue.toFixed(1)} ${conf.unit}).`);
+        }
+    });
+
+    const highTemp = Number(latest.coolant);
+    const fuelLevel = Number(latest.fuel);
+    const rpmValue = Number(latest.rpm);
+
+    if (Number.isFinite(highTemp) && Number.isFinite(rpmValue) && highTemp > 90 && rpmValue > 3000) {
+        insights.push('Kombinasi coolant tinggi dan RPM tinggi mengindikasikan potensi overheating saat beban puncak. Cek sistem pendingin dan beban generator.');
+    }
+
+    if (Number.isFinite(fuelLevel) && fuelLevel < 30) {
+        insights.push('Fuel level rendah terdeteksi. Jadwalkan pengisian untuk mencegah penurunan performa mesin saat operasi berkelanjutan.');
+    }
+
+    if (!insights.length) {
+        insights.push('Data tren relatif stabil pada rentang waktu terpilih. Belum ada anomali besar yang terdeteksi dari sensor utama.');
+    }
+
+    return insights.slice(0, 5);
+}
+
+function renderAIInsights() {
+    const insightEl = document.getElementById('aiInsightList');
+    if (!insightEl) return;
+
+    insightEl.innerHTML = aiInsightList
+        .map(item => `<li>${item}</li>`)
+        .join('');
+}
+
+function updateChart() {
+    const chartEl = document.getElementById('historyChart');
+    if (!chartEl) return;
+
+    const ctx = chartEl.getContext('2d');
+    if (myChart) myChart.destroy();
+
+    const paramFilter = document.getElementById('paramFilter').value;
+    const { minTime, maxTime, diffHours } = getChartTimeRange();
+
     let timeUnit = 'hour';
-    let displayFormat = 'HH:mm'; 
     let tooltipFormat = 'dd MMM HH:mm';
-    
-    if (diffHours > 24) {
-        timeUnit = 'day';
-        displayFormat = 'dd MMM'; // Contoh: 10 Dec
-    }
 
-    // 3. Siapkan Data (Sort -> Filter -> Smooth)
-    let chartData = [...rawApiData].sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
-    if (minTime && maxTime) {
-        chartData = chartData.filter(d => {
-            const t = new Date(d.timestamp).getTime();
-            return t >= minTime && t <= maxTime;
-        });
-    }
+    if (diffHours > (24 * 60)) timeUnit = 'month';
+    else if (diffHours > (24 * 7)) timeUnit = 'week';
+    else if (diffHours > 24) timeUnit = 'day';
+    else if (diffHours <= 6) timeUnit = 'minute';
 
-    // Lakukan Smoothing (Rata-rata 60 titik)
-    const smoothData = downsampleData(chartData, 60);
+    const sortedData = [...rawApiData].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const chartData = sortedData.filter(d => {
+        const t = new Date(d.timestamp).getTime();
+        if (minTime && t < minTime) return false;
+        if (maxTime && t > maxTime) return false;
+        return true;
+    });
 
-    // 4. Siapkan Datasets Berdasarkan Filter
+    const smoothData = downsampleData(chartData, 90);
+
     let datasets = [];
-    
     if (paramFilter === 'all') {
-        // Jika ALL: Tampilkan RPM dan Voltage sebagai default view
-        return;
+        const defaultParams = ['rpm', 'volt', 'fuel', 'coolant'];
+        datasets = defaultParams.map((key, idx) => {
+            const conf = PARAMS[key];
+            return {
+                label: `${key.toUpperCase()} (${conf.unit || ''})`,
+                data: smoothData.map(d => ({ x: d.timestamp, y: d[key] })),
+                borderColor: conf.color,
+                backgroundColor: conf.color + '22',
+                tension: 0.35,
+                pointRadius: 0,
+                borderWidth: 2,
+                yAxisID: idx === 0 ? 'y' : 'y1'
+            };
+        });
     } else {
-        // Jika Parameter Spesifik Dipilih (Fuel, Temp, Power, dll)
         const conf = PARAMS[paramFilter];
         const color = conf.color || '#1745a5';
-        
         datasets = [{
             label: `${paramFilter.toUpperCase()} (${conf.unit || ''})`,
-            data: smoothData.map(d => ({ x: d.timestamp, y: d[paramFilter] })), // Ambil data sesuai param
+            data: smoothData.map(d => ({ x: d.timestamp, y: d[paramFilter] })),
             borderColor: color,
-            backgroundColor: color + '20', // Tambah transparansi hex
-            yAxisID: 'y', 
-            fill: true, 
-            tension: 0.4, 
-            pointRadius: 3, // Titik lebih jelas jika single param
+            backgroundColor: color + '22',
+            yAxisID: 'y',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 2,
             borderWidth: 2
         }];
     }
 
-    // 5. Render Grafik
     myChart = new Chart(ctx, {
         type: 'line',
-        data: { datasets: datasets },
+        data: { datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
-            plugins: { 
+            plugins: {
                 legend: { position: 'top' },
                 tooltip: {
                     callbacks: {
                         title: (ctx) => {
                             const date = new Date(ctx[0].parsed.x);
-                            return date.toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+                            return date.toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
                         }
                     }
                 }
             },
             scales: {
-                x: { 
-                    type: 'time', 
-                    time: { 
-                        unit: timeUnit, 
-                        displayFormats: { 
-                            hour: 'HH:mm', 
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: timeUnit,
+                        tooltipFormat,
+                        displayFormats: {
+                            minute: 'HH:mm',
+                            hour: 'HH:mm',
                             day: 'dd MMM',
-                            minute: 'HH:mm'
-                        },
-                        tooltipFormat: tooltipFormat 
-                    }, 
+                            week: 'dd MMM',
+                            month: 'MMM yyyy'
+                        }
+                    },
                     grid: { display: false },
-                    min: minTime, 
-                    max: maxTime 
+                    min: minTime,
+                    max: maxTime,
+                    ticks: { maxTicksLimit: 10 }
                 },
-                y: { 
-                    position: 'left', 
-                    title: { display: true, text: paramFilter === 'all' ? 'RPM' : (PARAMS[paramFilter]?.unit || '') }, 
-                    beginAtZero: false 
+                y: {
+                    position: 'left',
+                    title: { display: true, text: paramFilter === 'all' ? 'Primary Sensor Value' : (PARAMS[paramFilter]?.unit || '') },
+                    beginAtZero: false
                 },
-                y1: { 
-                    display: paramFilter === 'all', // Sumbu kanan hanya muncul jika 'All'
-                    position: 'right', 
-                    grid: { drawOnChartArea: false }, 
-                    title: { display: true, text: 'Voltage (V)' } 
+                y1: {
+                    display: paramFilter === 'all',
+                    position: 'right',
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: 'Secondary Sensor Value' }
                 }
             }
         }
     });
+
+    aiInsightList = buildAIInsights(chartData);
+    renderAIInsights();
 }
 
 // --- INITIALIZATION ---

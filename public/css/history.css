@@ -81,3 +81,28 @@ tr, td { font-size: 14px; color: #000000; }
     .history-summary { grid-template-columns: 1fr 1fr; }
     table { display: block; overflow-x: auto; }
 }
+.ai-insight-card {
+    margin-top: 16px;
+    border: 1px solid #dbeafe;
+    border-radius: 10px;
+    background: #f8fbff;
+    padding: 14px 16px;
+}
+
+.ai-insight-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.ai-insight-list {
+    padding-left: 20px;
+    display: grid;
+    gap: 6px;
+    color: #1e293b;
+    font-size: 13px;
+}
