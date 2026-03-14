@@ -138,6 +138,18 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="analysis-panel">
+                    <div class="analysis-header">
+                        <h3 class="analysis-title"><i class="fas fa-wave-square"></i> FFT Spectrum Analysis</h3>
+                        <button class="chart-action-btn" id="recalculateFft"><i class="fas fa-sync-alt"></i> Recalculate FFT</button>
+                    </div>
+                    <div class="analysis-subtitle" id="fftSummary">Select sensor and date range to analyze dominant frequencies.</div>
+                    <div class="fft-chart-wrap">
+                        <canvas id="fftChart"></canvas>
+                    </div>
+                    <div id="fftInsights" class="fft-insights"></div>
+                </div>
             </div>
 
         </div> </div> <script src="js/sidebar.js"></script>

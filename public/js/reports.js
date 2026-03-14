@@ -20,6 +20,7 @@ const SENSORS = {
 };
 
 let myChart = null;
+let fftChart = null;
 let currentData = [];
 let selectedSensors = ['rpm']; // Default sensor to show
 
@@ -201,6 +202,7 @@ function setupEventListeners() {
     // Export buttons
     document.getElementById('toggleExport')?.addEventListener('click', toggleExportOptions);
     document.getElementById('printChart')?.addEventListener('click', printChart);
+    document.getElementById('recalculateFft')?.addEventListener('click', () => renderFftAnalysis(currentData));
 }
 
 function updateDateFromHours(hours) {
@@ -307,6 +309,7 @@ async function loadReportData() {
                 updateOverview(currentData);
                 renderSensorCards(currentData);
                 renderChart(currentData);
+                renderFftAnalysis(currentData);
                 updateChartTitle(dateFrom?.value, dateTo?.value);
             } else {
                 showNoDataMessage();
