@@ -305,10 +305,15 @@ function computeTimeRange(data) {
 
 function getBucketMsByRange(timeRange) {
     const hour = 60 * 60 * 1000;
-    if (timeRange > 90 * 24 * hour) return 12 * hour;
-    if (timeRange > 30 * 24 * hour) return 6 * hour;
-    if (timeRange > 7 * 24 * hour) return 2 * hour;
-    if (timeRange > 24 * hour) return 30 * 60 * 1000;
+    const day = 24 * hour;
+
+    // Untuk range panjang (mingguan/bulanan), gunakan agregasi harian
+    // agar sampel selaras dengan rentang tanggal (contoh Des 1-31 ~= 31 sampel).
+    if (timeRange > 120 * day) return 3 * day;
+    if (timeRange > 45 * day) return 2 * day;
+    if (timeRange > 7 * day) return 1 * day;
+    if (timeRange > 2 * day) return 6 * hour;
+    if (timeRange > day) return 30 * 60 * 1000;
     return 5 * 60 * 1000;
 }
 
@@ -434,7 +439,7 @@ function renderChart(data) {
             options: getChartOptions(timeRange, yScale)
         });
 
-        updateChartDescription(bucketMs);
+        updateChartDescription(bucketMs, labels.length);
         console.log('Chart rendered successfully');
         
     } catch (error) {
@@ -642,10 +647,11 @@ function formatBucketLabel(bucketMs) {
     return `${Math.round(bucketMs / minute)} min`;
 }
 
-function updateChartDescription(bucketMs) {
+function updateChartDescription(bucketMs, sampleCount) {
     const desc = document.getElementById('chartDescription');
     if (!desc) return;
-    desc.textContent = `Tren menampilkan nilai rata-rata per ${formatBucketLabel(bucketMs)} sesuai rentang waktu yang di-apply.`;
+    const suffix = Number.isFinite(sampleCount) ? ` (samples: ${sampleCount})` : '';
+    desc.textContent = `Tren menampilkan nilai rata-rata per ${formatBucketLabel(bucketMs)} sesuai rentang waktu yang di-apply${suffix}.`;
 }
 
 function getChartOptions(timeRange, yScale) {
