@@ -461,22 +461,7 @@ app.get('/api/reports', async (req, res) => {
             if (!Number.isNaN(h) && h > 0) {
                 timeFilter.$gte = new Date(Date.now() - h * 3600 * 1000);
             }
-            if (hours) {
-                const h = Number(hours);
-                if (!Number.isNaN(h) && h > 0) {
-                    return { start: new Date(Date.now() - h * 3600 * 1000), end: null };
-                }
-            }
-            return null;
-        };
-
-        const buildDbTimeFilter = (fieldName) => {
-            if (!requestedRange) return {};
-            const clause = {};
-            if (requestedRange.start) clause.$gte = requestedRange.start;
-            if (requestedRange.end) clause.$lte = requestedRange.end;
-            return { [fieldName]: clause };
-        };
+        }
 
         const buildMongoQuery = (fieldName) =>
             Object.keys(timeFilter).length ? { [fieldName]: timeFilter } : {};
@@ -508,12 +493,12 @@ app.get('/api/reports', async (req, res) => {
 
         if (!reports.length) {
             const orConditions = Object.keys(timeFilter).length
-                ? [{ timestamp: timeFilter }, { createdAt: timeFilter }]
+                ? [{ timestamp: timeFilter }, { createdAt: timeFilter }, { date: timeFilter }]
                 : [];
 
             const fallbackQuery = orConditions.length ? { $or: orConditions } : {};
             reports = await GeneratorData.find(fallbackQuery)
-                .sort({ timestamp: -1 })
+                .sort({ timestamp: -1, createdAt: -1, date: -1 })
                 .limit(limit)
                 .lean();
         }
