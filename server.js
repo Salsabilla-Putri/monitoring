@@ -87,7 +87,7 @@ async function loadThresholdsFromDB() {
 }
 
 // --- MQTT LOGIC ---
-const mqttClient = mqtt.connect(process.env.MQTT_BROKER || 'mqtt://10.157.223.227:1883', {
+const mqttClient = mqtt.connect(process.env.MQTT_BROKER || 'mqtt://10.21.107.16:1883', {
     username: process.env.MQTT_USERNAME || '/TA20:TA20',
     password: process.env.MQTT_PASSWORD || 'TA242501020'
 });
@@ -468,7 +468,7 @@ app.get('/api/reports', async (req, res) => {
                 }
             }
             return null;
-        })();
+        };
 
         const buildDbTimeFilter = (fieldName) => {
             if (!requestedRange) return {};
