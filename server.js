@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const mqtt = require('mqtt');
 const cors = require('cors');
 const path = require('path');
+const { spawnSync } = require('child_process');
 require('dotenv').config();
 
 const app = express();
@@ -14,7 +15,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'login.html')); });
@@ -412,6 +413,39 @@ app.delete('/api/maintenance/:id', async (req, res) => {
 });
 // Tambahkan kode ini di dalam server.js (sebelum app.listen)
 
+
+
+app.post('/api/reports/analysis', async (req, res) => {
+    try {
+        const { rows, sensor, maxPoints } = req.body || {};
+        const payload = {
+            rows: Array.isArray(rows) ? rows : [],
+            sensor: sensor || 'rpm',
+            max_points: Number.isFinite(Number(maxPoints)) ? Number(maxPoints) : 300
+        };
+
+        const scriptPath = path.join(__dirname, 'scripts_report_analysis.py');
+        const proc = spawnSync('python3', [scriptPath], {
+            input: JSON.stringify(payload),
+            encoding: 'utf-8',
+            maxBuffer: 1024 * 1024 * 4
+        });
+
+        if (proc.error) {
+            return res.status(500).json({ success: false, error: proc.error.message });
+        }
+
+        if (proc.status !== 0) {
+            return res.status(500).json({ success: false, error: proc.stderr || proc.stdout || 'analysis failed' });
+        }
+
+        const parsed = JSON.parse(proc.stdout || '{}');
+        res.json({ success: parsed.ok !== false, data: parsed });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // API Endpoint untuk mengambil data report dari collection MongoDB yang ditetapkan
 app.get('/api/reports', async (req, res) => {
     try {
@@ -461,22 +495,7 @@ app.get('/api/reports', async (req, res) => {
             if (!Number.isNaN(h) && h > 0) {
                 timeFilter.$gte = new Date(Date.now() - h * 3600 * 1000);
             }
-            if (hours) {
-                const h = Number(hours);
-                if (!Number.isNaN(h) && h > 0) {
-                    return { start: new Date(Date.now() - h * 3600 * 1000), end: null };
-                }
-            }
-            return null;
-        };
-
-        const buildDbTimeFilter = (fieldName) => {
-            if (!requestedRange) return {};
-            const clause = {};
-            if (requestedRange.start) clause.$gte = requestedRange.start;
-            if (requestedRange.end) clause.$lte = requestedRange.end;
-            return { [fieldName]: clause };
-        };
+        }
 
         const buildMongoQuery = (fieldName) =>
             Object.keys(timeFilter).length ? { [fieldName]: timeFilter } : {};
@@ -508,12 +527,12 @@ app.get('/api/reports', async (req, res) => {
 
         if (!reports.length) {
             const orConditions = Object.keys(timeFilter).length
-                ? [{ timestamp: timeFilter }, { createdAt: timeFilter }]
+                ? [{ timestamp: timeFilter }, { createdAt: timeFilter }, { date: timeFilter }]
                 : [];
 
             const fallbackQuery = orConditions.length ? { $or: orConditions } : {};
             reports = await GeneratorData.find(fallbackQuery)
-                .sort({ timestamp: -1 })
+                .sort({ timestamp: -1, createdAt: -1, date: -1 })
                 .limit(limit)
                 .lean();
         }
