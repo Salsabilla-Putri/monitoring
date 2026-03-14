@@ -284,6 +284,43 @@ function downsampleData(data, targetPoints = 60) {
 }
 
 
+
+function buildDailyBuckets(data, minTime, maxTime) {
+    if (minTime === null || maxTime === null) return data;
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const groups = new Map();
+
+    data.forEach((row) => {
+        const ts = new Date(row.timestamp).getTime();
+        if (!Number.isFinite(ts)) return;
+        const dayStart = new Date(ts);
+        dayStart.setHours(0, 0, 0, 0);
+        const key = dayStart.getTime();
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(row);
+    });
+
+    const bucketed = [];
+    for (let cursor = minTime; cursor <= maxTime; cursor += dayMs) {
+        const rows = groups.get(cursor) || [];
+        const entry = { timestamp: new Date(cursor).toISOString() };
+
+        Object.keys(PARAMS).forEach((key) => {
+            const values = rows
+                .map((item) => Number(item[key]))
+                .filter((value) => Number.isFinite(value));
+            entry[key] = values.length
+                ? values.reduce((acc, val) => acc + val, 0) / values.length
+                : null;
+        });
+
+        bucketed.push(entry);
+    }
+
+    return bucketed;
+}
+
 function calculateSensorStats(values) {
     if (!values.length) return null;
 
@@ -416,23 +453,31 @@ function updateChart() {
         return;
     }
 
-    if (chartData.length < MIN_CHART_SAMPLES) {
-        setChartStateMessage(`Data belum cukup untuk grafik. Minimal ${MIN_CHART_SAMPLES} sampel, saat ini ${chartData.length} sampel.`);
-        renderSampleWarning(chartData.length);
+    const diffMs = Math.max(1, (maxTime ?? new Date(chartData[chartData.length - 1].timestamp).getTime()) - (minTime ?? new Date(chartData[0].timestamp).getTime()));
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    let preparedData = chartData;
+    if (diffDays >= 1 && minTime !== null && maxTime !== null) {
+        preparedData = buildDailyBuckets(chartData, minTime, maxTime);
+    }
+
+    if (preparedData.length < MIN_CHART_SAMPLES) {
+        setChartStateMessage(`Data belum cukup untuk grafik. Minimal ${MIN_CHART_SAMPLES} sampel, saat ini ${preparedData.length} sampel.`);
+        renderSampleWarning(preparedData.length);
         return;
     }
 
     setChartStateMessage('');
 
-    const diffMs = Math.max(1, (maxTime ?? new Date(chartData[chartData.length - 1].timestamp).getTime()) - (minTime ?? new Date(chartData[0].timestamp).getTime()));
+    
     const diffHours = diffMs / (1000 * 3600);
 
     let timeUnit = 'hour';
     if (diffHours <= 8) timeUnit = 'minute';
     else if (diffHours > 48) timeUnit = 'day';
 
-    const targetPoints = Math.max(MIN_CHART_SAMPLES, Math.min(120, chartData.length));
-    const smoothData = downsampleData(chartData, targetPoints);
+    const targetPoints = Math.max(MIN_CHART_SAMPLES, Math.min(120, preparedData.length));
+    const smoothData = downsampleData(preparedData, targetPoints);
 
     const visibleParams = paramFilter === 'all'
         ? ['rpm', 'volt', 'freq']
@@ -491,12 +536,12 @@ function updateChart() {
 
     const seriesByParam = {};
     Object.keys(PARAMS).forEach((key) => {
-        seriesByParam[key] = chartData
+        seriesByParam[key] = preparedData
             .map((row) => Number(row[key]))
             .filter((value) => Number.isFinite(value));
     });
 
-    renderAIInsights(buildAIInsights(seriesByParam, chartData.length));
+    renderAIInsights(buildAIInsights(seriesByParam, preparedData.length));
 }
 
 // --- INITIALIZATION ---
