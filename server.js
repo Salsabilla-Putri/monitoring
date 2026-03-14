@@ -497,8 +497,21 @@ app.get('/api/reports', async (req, res) => {
             }
         }
 
-        const buildMongoQuery = (fieldName) =>
-            Object.keys(timeFilter).length ? { [fieldName]: timeFilter } : {};
+        const buildFieldCondition = (fieldName) =>
+            Object.keys(timeFilter).length ? { [fieldName]: timeFilter } : { [fieldName]: { $exists: true } };
+
+        const mergeUniqueRows = (rows) => {
+            const seen = new Set();
+            const out = [];
+            for (const row of rows) {
+                const ts = row.timestamp || row.createdAt || row.date || row.waktu || '';
+                const key = `${row._id || ''}|${ts}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push(row);
+            }
+            return out;
+        };
 
         let reports = [];
         const candidateCollections = ['reports', 'generatordatas', 'generator_data'];
@@ -511,15 +524,19 @@ app.get('/api/reports', async (req, res) => {
                 if (!existingNames.has(collectionName)) continue;
 
                 const collection = mongoose.connection.db.collection(collectionName);
-                const [byTimestamp, byCreatedAt, byDate] = await Promise.all([
-                    collection.find(buildMongoQuery('timestamp')).sort({ timestamp: -1 }).limit(limit).toArray(),
-                    collection.find(buildMongoQuery('createdAt')).sort({ createdAt: -1 }).limit(limit).toArray(),
-                    collection.find(buildMongoQuery('date')).sort({ date: -1 }).limit(limit).toArray()
-                ]);
+                const orConditions = [
+                    buildFieldCondition('timestamp'),
+                    buildFieldCondition('createdAt'),
+                    buildFieldCondition('date')
+                ];
 
-                const picked = byTimestamp.length ? byTimestamp : (byCreatedAt.length ? byCreatedAt : byDate);
-                if (picked.length) {
-                    reports = picked;
+                const docs = await collection.find({ $or: orConditions }).limit(limit * 3).toArray();
+                const merged = mergeUniqueRows(docs)
+                    .sort((a, b) => new Date(b.timestamp || b.createdAt || b.date || 0) - new Date(a.timestamp || a.createdAt || a.date || 0))
+                    .slice(0, limit);
+
+                if (merged.length) {
+                    reports = merged;
                     break;
                 }
             }
