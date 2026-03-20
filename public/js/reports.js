@@ -344,6 +344,76 @@ function buildReportUrls({ startDate, endDate, requestLimit }) {
     };
 }
 
+
+async function fetchLatestSnapshotRows() {
+    const response = await fetch('/api/engine-data/latest');
+    if (!response.ok) {
+        throw new Error(`Latest snapshot error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const data = result?.data ? [result.data] : [];
+    return {
+        result,
+        rows: normalizeReportRows(data)
+    };
+}
+
+function renderDataSourceNotice({ source, warning, mode = 'info', message }) {
+    const noticeEl = document.getElementById('dataSourceNotice');
+    if (!noticeEl) return;
+
+    const presets = {
+        success: { icon: 'fa-circle-check', className: 'notice-success' },
+        warning: { icon: 'fa-triangle-exclamation', className: 'notice-warning' },
+        info: { icon: 'fa-circle-info', className: '' }
+    };
+
+    const preset = presets[mode] || presets.info;
+    noticeEl.className = `data-source-notice ${preset.className}`.trim();
+    noticeEl.innerHTML = `
+        <i class="fas ${preset.icon}"></i>
+        <div>
+            <strong>${message}</strong>
+            ${source ? `<div style="margin-top:4px; font-size:13px; opacity:0.9;">Sumber data: ${source}</div>` : ''}
+            ${warning ? `<div style="margin-top:4px; font-size:12px; opacity:0.82;">Info teknis: ${warning}</div>` : ''}
+        </div>
+    `;
+    noticeEl.style.display = 'flex';
+}
+
+function applyRowsToReports(rows, meta = {}) {
+    currentData = normalizeReportRows(rows);
+
+    if (currentData.length > 0) {
+        updateOverview(currentData);
+        renderSensorCards(currentData);
+        renderChart(currentData);
+        renderFftAnalysis(currentData);
+        updateChartTitle(document.getElementById('dateFrom')?.value, document.getElementById('dateTo')?.value);
+
+        if (meta.source === 'memory') {
+            renderDataSourceNotice({
+                source: meta.source,
+                warning: meta.warning,
+                mode: 'warning',
+                message: 'Data historis belum tersedia. Menampilkan data cadangan/snapshot agar halaman tetap informatif.'
+            });
+        } else {
+            renderDataSourceNotice({
+                source: meta.source || 'database',
+                warning: meta.warning,
+                mode: 'success',
+                message: 'Data berhasil dimuat.'
+            });
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 async function loadReportData() {
     console.log('Loading report data...');
     
@@ -411,16 +481,17 @@ async function loadReportData() {
         const rows = Array.isArray(result) ? result : (result.data || []);
         
         if ((result.success !== false) && rows) {
-            currentData = normalizeReportRows(rows);
-
-            if (currentData.length > 0) {
-                updateOverview(currentData);
-                renderSensorCards(currentData);
-                renderChart(currentData);
-                renderFftAnalysis(currentData);
-                updateChartTitle(dateFrom?.value, dateTo?.value);
-            } else {
-                showNoDataMessage();
+            if (!applyRowsToReports(rows, result)) {
+                const snapshot = await fetchLatestSnapshotRows();
+                if (!applyRowsToReports(snapshot.rows, { ...snapshot.result, source: 'memory' })) {
+                    renderDataSourceNotice({
+                        source: result.source,
+                        warning: result.warning,
+                        mode: 'warning',
+                        message: 'Koneksi backend aktif, tetapi belum ada data sensor yang tersimpan untuk rentang waktu ini.'
+                    });
+                    showNoDataMessage();
+                }
             }
         } else {
             throw new Error(result.error || 'No data received');
@@ -428,7 +499,26 @@ async function loadReportData() {
         
     } catch (error) {
         console.error('Error loading data:', error);
-        showError(error.message);
+        try {
+            const snapshot = await fetchLatestSnapshotRows();
+            if (!applyRowsToReports(snapshot.rows, { ...snapshot.result, source: 'memory', warning: error.message })) {
+                renderDataSourceNotice({
+                    source: 'memory',
+                    warning: error.message,
+                    mode: 'warning',
+                    message: 'Endpoint historis gagal diakses, tetapi halaman tetap mencoba menampilkan snapshot terakhir.'
+                });
+                showNoDataMessage();
+            }
+        } catch (snapshotError) {
+            renderDataSourceNotice({
+                source: 'unavailable',
+                warning: snapshotError.message,
+                mode: 'warning',
+                message: 'Backend belum siap atau koneksi data masih bermasalah.'
+            });
+            showError(error.message);
+        }
     } finally {
         // Hide loading
         if (loadingEl) {
