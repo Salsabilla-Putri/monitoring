@@ -1,10 +1,29 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const mqtt = require('mqtt');
 const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
+const { EventEmitter } = require('events');
 const { spawnSync } = require('child_process');
 require('dotenv').config();
+
+mongoose.set('bufferCommands', false);
+
+const mqttModulePath = path.join(__dirname, 'node_modules', 'mqtt', 'build', 'index.js');
+const mqtt = fs.existsSync(mqttModulePath) ? require('mqtt') : null;
+
+function createDisabledMqttClient() {
+    const client = new EventEmitter();
+    client.subscribe = () => undefined;
+    client.publish = () => undefined;
+    client.end = () => undefined;
+
+    process.nextTick(() => {
+        client.emit('error', new Error('MQTT module unavailable; running without live broker connection.'));
+    });
+
+    return client;
+}
 
 const app = express();
 
@@ -19,6 +38,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'login.html')); });
+
+function isDbReady() {
+    return mongoose.connection.readyState === 1;
+}
 
 // DATABASE
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/generator_monitoring', {
@@ -88,10 +111,12 @@ async function loadThresholdsFromDB() {
 }
 
 // --- MQTT LOGIC ---
-const mqttClient = mqtt.connect(process.env.MQTT_BROKER || 'mqtt://10.21.107.16:1883', {
-    username: process.env.MQTT_USERNAME || '/TA20:TA20',
-    password: process.env.MQTT_PASSWORD || 'TA242501020'
-});
+const mqttClient = mqtt
+    ? mqtt.connect(process.env.MQTT_BROKER || 'mqtt://10.21.107.16:1883', {
+        username: process.env.MQTT_USERNAME || '/TA20:TA20',
+        password: process.env.MQTT_PASSWORD || 'TA242501020'
+    })
+    : createDisabledMqttClient();
 
 let latestData = {
     deviceId: 'GENERATOR #1', timestamp: new Date(),
@@ -102,6 +127,10 @@ let latestData = {
 mqttClient.on('connect', () => {
     console.log('✅ Connected to MQTT Broker');
     mqttClient.subscribe('gen/#');
+});
+
+mqttClient.on('error', (error) => {
+    console.warn('⚠️ MQTT unavailable:', error.message);
 });
 
 // LOGIC ALARM DINAMIS (Menggunakan ACTIVE_THRESHOLDS)
@@ -220,10 +249,16 @@ mqttClient.on('message', async (topic, message) => {
 
 app.get('/api/engine-data/latest', async (req, res) => {
     try {
+        if (!isDbReady()) {
+            return res.json({ success: true, data: latestData, source: 'memory' });
+        }
+
         const dbData = await GeneratorData.findOne().sort({ timestamp: -1 });
         const isDbFresh = dbData && (new Date() - dbData.timestamp < 15000);
-        res.json({ success: true, data: isDbFresh ? dbData : latestData });
-    } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+        res.json({ success: true, data: isDbFresh ? dbData : latestData, source: isDbFresh ? 'database' : 'memory' });
+    } catch (error) {
+        res.json({ success: true, data: latestData, source: 'memory', warning: error.message });
+    }
 });
 
 // 2. GET History Data (Updated for Date Filter)
@@ -253,13 +288,17 @@ app.get('/api/engine-data/history', async (req, res) => {
             query.timestamp = { $gte: cutoff };
         }
 
+        if (!isDbReady()) {
+            return res.json({ success: true, count: 0, data: [], source: 'memory' });
+        }
+
         const data = await GeneratorData.find(query)
             .sort({ timestamp: -1 })
             .limit(parseInt(limit));
             
-        res.json({ success: true, count: data.length, data });
+        res.json({ success: true, count: data.length, data, source: 'database' });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.json({ success: true, count: 0, data: [], source: 'memory', warning: error.message });
     }
 });
 
@@ -542,7 +581,7 @@ app.get('/api/reports', async (req, res) => {
             }
         }
 
-        if (!reports.length) {
+        if (!reports.length && isDbReady()) {
             const orConditions = Object.keys(timeFilter).length
                 ? [{ timestamp: timeFilter }, { createdAt: timeFilter }, { date: timeFilter }]
                 : [];
@@ -559,9 +598,9 @@ app.get('/api/reports', async (req, res) => {
             .filter(Boolean)
             .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-        res.json({ success: true, count: normalizedReports.length, data: normalizedReports });
+        res.json({ success: true, count: normalizedReports.length, data: normalizedReports, source: isDbReady() ? 'database' : 'memory' });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        res.json({ success: true, count: 0, data: [], source: 'memory', warning: err.message });
     }
 });
 
