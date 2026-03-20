@@ -295,8 +295,7 @@ body {
     .sensors-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 }
 @media (max-width: 768px) {
-    .main-content { margin-left: 60px; }
-    .topbar { left: 60px; }
+    .main-content { margin-left: 0; padding: 16px; padding-top: 104px; }
     .filter-bar { flex-direction: column; align-items: flex-start; }
     .header { flex-direction: column; align-items: flex-start; gap: 15px; }
     .header-info { width: 100%; justify-content: space-between; }

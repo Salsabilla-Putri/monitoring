@@ -252,7 +252,7 @@ body {
     .grid-3, .grid-2 { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
-    .main-content { margin-left: 60px; width: calc(100% - 60px); padding: 15px; padding-top: 80px; }
+    .main-content { margin-left: 0; width: 100%; padding: 16px; padding-top: 104px; }
     .overview-cards { grid-template-columns: 1fr; }
     .hero { height: 180px; }
     .hero-time { font-size: 2.5em; }
