@@ -318,29 +318,71 @@ function normalizeReportRows(rows) {
 
 // --- 6. DATA FETCHING ---
 
-async function fetchWithFallback(primaryUrl, fallbackUrl) {
-    const primaryResponse = await fetch(primaryUrl);
-    if (primaryResponse.ok || primaryResponse.status !== 404 || !fallbackUrl) {
+function getApiBaseCandidates() {
+    const candidates = [''];
+
+    if (typeof window !== 'undefined' && window.location) {
+        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+        if (pathSegments.length > 1) {
+            const basePath = `/${pathSegments.slice(0, -1).join('/')}`;
+            if (basePath && !candidates.includes(basePath)) {
+                candidates.push(basePath);
+            }
+        }
+    }
+
+    return candidates;
+}
+
+function buildApiCandidates(endpointPath, queryString = '') {
+    const suffix = queryString ? `?${queryString}` : '';
+    return getApiBaseCandidates().map((basePath) => `${basePath}${endpointPath}${suffix}`);
+}
+
+async function fetchFirstAvailable(urls) {
+    let lastResponse = null;
+
+    for (const url of urls) {
+        const response = await fetch(url);
+        if (response.ok || response.status !== 404) {
+            return response;
+        }
+
+        lastResponse = response;
+        console.warn(`Reports endpoint not found (${url}). Trying next candidate...`);
+    }
+
+    return lastResponse;
+}
+
+async function fetchWithFallback(primaryUrls, fallbackUrls = []) {
+    const primaryResponse = await fetchFirstAvailable(primaryUrls);
+    if (primaryResponse && (primaryResponse.ok || primaryResponse.status !== 404 || !fallbackUrls.length)) {
         return primaryResponse;
     }
 
-    console.warn(`Primary reports endpoint not found (${primaryUrl}). Falling back to ${fallbackUrl}.`);
-    return fetch(fallbackUrl);
+    console.warn(`Primary reports endpoints unavailable. Falling back to ${fallbackUrls.join(', ')}.`);
+    return fetchFirstAvailable(fallbackUrls);
 }
 
 function buildReportUrls({ startDate, endDate, requestLimit }) {
     if (startDate && endDate) {
-        const startIso = startDate.toISOString();
-        const endIso = endDate.toISOString();
+        const params = new URLSearchParams({
+            limit: String(requestLimit),
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString()
+        }).toString();
+
         return {
-            primaryUrl: `${API_URL}?limit=${requestLimit}&startDate=${startIso}&endDate=${endIso}`,
-            fallbackUrl: `/api/engine-data/history?limit=${requestLimit}&startDate=${startIso}&endDate=${endIso}`
+            primaryUrls: buildApiCandidates(API_URL, params),
+            fallbackUrls: buildApiCandidates('/api/engine-data/history', params)
         };
     }
 
+    const params = new URLSearchParams({ limit: String(requestLimit), hours: '24' }).toString();
     return {
-        primaryUrl: `${API_URL}?limit=${requestLimit}&hours=24`,
-        fallbackUrl: `/api/engine-data/history?limit=${requestLimit}&hours=24`
+        primaryUrls: buildApiCandidates(API_URL, params),
+        fallbackUrls: buildApiCandidates('/api/engine-data/history', params)
     };
 }
 
@@ -370,7 +412,7 @@ function createDemoRows() {
 }
 
 async function fetchLatestSnapshotRows() {
-    const response = await fetch('/api/engine-data/latest');
+    const response = await fetchFirstAvailable(buildApiCandidates('/api/engine-data/latest'));
     if (!response.ok) {
         throw new Error(`Latest snapshot error: ${response.status}`);
     }
@@ -497,8 +539,8 @@ async function loadReportData() {
         }
         
         // Fetch data
-        console.log('Fetching from:', urls.primaryUrl);
-        const response = await fetchWithFallback(urls.primaryUrl, urls.fallbackUrl);
+        console.log('Fetching from:', urls.primaryUrls[0], 'fallback:', urls.fallbackUrls[0]);
+        const response = await fetchWithFallback(urls.primaryUrls, urls.fallbackUrls);
         
         if (!response.ok) {
             throw new Error(`HTTP error: ${response.status}`);
