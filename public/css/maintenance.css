@@ -106,7 +106,7 @@ tr:hover { background: #f8fafc; }
 
 /* RESPONSIVE */
 @media (max-width: 768px) {
-  .main-content { margin-left: 60px; }
+  .main-content { margin-left: 0; padding: 16px; padding-top: 104px; }
   .maintenance-summary { grid-template-columns: 1fr 1fr; }
   .card-header { flex-direction: column; align-items: flex-start; gap: 15px; }
   .action-buttons { width: 100%; justify-content: space-between; }

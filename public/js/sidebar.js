@@ -1,7 +1,6 @@
 // File: public/js/sidebar.js
 
 function initSidebarEvents() {
-  // Logika logout
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', function (e) {
@@ -16,7 +15,6 @@ function initSidebarEvents() {
     });
   }
 }
-
 
 function syncTopbarUserLabel() {
   const profileLabel = localStorage.getItem('username') || 'Pengguna';
@@ -39,6 +37,10 @@ function setActiveLink() {
   else if (page.includes('alarm')) document.getElementById('link-alarm')?.classList.add('active');
 }
 
+function closeMobileSidebar() {
+  document.body.classList.remove('mobile-sidebar-open');
+}
+
 function setupSidebarHoverState() {
   const sidebar = document.querySelector('.sidebar');
   if (!sidebar) return;
@@ -47,7 +49,9 @@ function setupSidebarHoverState() {
 
   const openSidebar = () => {
     clearTimeout(closeTimer);
-    document.body.classList.add('sidebar-expanded');
+    if (window.innerWidth > 768) {
+      document.body.classList.add('sidebar-expanded');
+    }
   };
 
   const closeSidebar = () => {
@@ -61,6 +65,25 @@ function setupSidebarHoverState() {
   sidebar.addEventListener('mouseleave', closeSidebar);
 }
 
+function setupMobileSidebarControls() {
+  const toggleBtn = document.querySelector('.mobile-menu-toggle');
+  const overlay = document.querySelector('.sidebar-overlay');
+  const sidebarLinks = document.querySelectorAll('.sidebar .nav-item');
+
+  toggleBtn?.addEventListener('click', () => {
+    document.body.classList.toggle('mobile-sidebar-open');
+  });
+
+  overlay?.addEventListener('click', closeMobileSidebar);
+  sidebarLinks.forEach((link) => link.addEventListener('click', closeMobileSidebar));
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) {
+      closeMobileSidebar();
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   fetch('sidebar.html')
     .then((response) => response.text())
@@ -68,18 +91,23 @@ document.addEventListener('DOMContentLoaded', function () {
       const container = document.getElementById('sidebar-container');
       if (!container) return;
 
-      // Gunakan innerHTML agar wrapper #sidebar-container tetap ada (menghindari selector glitch)
-      container.innerHTML = data;
+      container.innerHTML = `
+        <button class="mobile-menu-toggle" type="button" aria-label="Buka menu navigasi">
+          <i class="fas fa-bars"></i>
+        </button>
+        <div class="sidebar-overlay"></div>
+        ${data}
+      `;
 
       initSidebarEvents();
       setActiveLink();
       setupSidebarHoverState();
+      setupMobileSidebarControls();
     })
     .catch((err) => console.error('Gagal memuat sidebar:', err));
 
   syncTopbarUserLabel();
 
-  // Delegasi click untuk area user (ikon + teks)
   document.addEventListener('click', function (e) {
     const userBtn = e.target.closest('#user-btn') || e.target.closest('.user-info');
     if (userBtn && !window.location.pathname.includes('login.html')) {
