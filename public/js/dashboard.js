@@ -1,4 +1,4 @@
-const API_URL = '/api';
+const API_URL = '/api'; 
 let activeChart = null;
 
 // --- UTILS ---
