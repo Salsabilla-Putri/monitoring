@@ -78,7 +78,7 @@ tr, td { font-size: var(--text-base-size); color: #000000; }
 /* RESPONSIVE */
 @media (max-width: 900px) { .filter-grid { grid-template-columns: 1fr; gap: 15px; } }
 @media (max-width: 768px) {
-    .main-content { margin-left: 60px; }
+    .main-content { margin-left: 0; padding: 16px; padding-top: 104px; }
     .history-summary { grid-template-columns: 1fr 1fr; }
     table { display: block; overflow-x: auto; }
 }
