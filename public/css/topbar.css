@@ -1,26 +1,28 @@
 /* === TOPBAR STYLES (FIXED + RESPONSIVE) === */
 .topbar {
     position: fixed;
-    top: 0;
-    left: 80px;
-    right: 0;
-    min-height: 60px;
-    background: #fff;
-    background: var(--card-bg, #fff);
-    border-bottom: 1px solid #e2e8f0;
+    top: 12px;
+    left: 92px;
+    right: 12px;
+    min-height: 64px;
+    background: rgba(255,255,255,0.9);
+    background: color-mix(in srgb, var(--card-bg, #fff) 90%, transparent);
+    border: 1px solid rgba(226, 232, 240, 0.95);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 12px 24px;
+    padding: 12px 20px;
     z-index: 20;
-    transition: left 0.3s;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    transition: left 0.3s, right 0.3s;
+    box-shadow: 0 18px 40px rgba(15,23,42,0.08);
+    border-radius: 20px;
+    backdrop-filter: blur(18px);
 }
 
 #sidebar-container:hover ~ .topbar,
 body.sidebar-expanded .topbar {
-    left: 220px;
+    left: 232px;
 }
 
 .topbar-title {
@@ -56,11 +58,14 @@ body.sidebar-expanded .topbar {
     .topbar,
     #sidebar-container:hover ~ .topbar,
     body.sidebar-expanded .topbar {
-        left: 0;
-        padding: 12px 16px 12px 68px;
-        min-height: 68px;
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        padding: 12px 14px 12px 64px;
+        min-height: 72px;
         align-items: center;
         flex-wrap: wrap;
+        border-radius: 18px;
     }
 
     .topbar-title {
