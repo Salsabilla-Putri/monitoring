@@ -345,6 +345,30 @@ function buildReportUrls({ startDate, endDate, requestLimit }) {
 }
 
 
+
+function createDemoRows() {
+    const now = Date.now();
+    const offsets = [5, 4, 3, 2, 1, 0];
+    return offsets.map((hourOffset, index) => ({
+        timestamp: new Date(now - hourOffset * 60 * 60 * 1000).toISOString(),
+        rpm: 1480 + index * 18,
+        volt: 221 + (index % 2),
+        amp: 28 + index,
+        power: 620 + index * 22,
+        freq: 50 + ((index % 2) * 0.08),
+        temp: 76 + index,
+        coolant: 76 + index,
+        fuel: 68 - index,
+        oil: 42 - (index * 0.5),
+        iat: 31 + (index * 0.4),
+        map: 102 + index,
+        afr: 14.1 + (index * 0.05),
+        tps: 34 + index,
+        status: 'DEMO',
+        sync: 'SIMULATED'
+    }));
+}
+
 async function fetchLatestSnapshotRows() {
     const response = await fetch('/api/engine-data/latest');
     if (!response.ok) {
@@ -359,7 +383,7 @@ async function fetchLatestSnapshotRows() {
     };
 }
 
-function renderDataSourceNotice({ source, warning, mode = 'info', message }) {
+function renderDataSourceNotice({ source, mode = 'info', message }) {
     const noticeEl = document.getElementById('dataSourceNotice');
     if (!noticeEl) return;
 
@@ -375,8 +399,7 @@ function renderDataSourceNotice({ source, warning, mode = 'info', message }) {
         <i class="fas ${preset.icon}"></i>
         <div>
             <strong>${message}</strong>
-            ${source ? `<div style="margin-top:4px; font-size:13px; opacity:0.9;">Sumber data: ${source}</div>` : ''}
-            ${warning ? `<div style="margin-top:4px; font-size:12px; opacity:0.82;">Info teknis: ${warning}</div>` : ''}
+            ${source ? `<div style="margin-top:4px; font-size:13px; opacity:0.9;">Mode tampilan: ${source}</div>` : ''}
         </div>
     `;
     noticeEl.style.display = 'flex';
@@ -392,17 +415,21 @@ function applyRowsToReports(rows, meta = {}) {
         renderFftAnalysis(currentData);
         updateChartTitle(document.getElementById('dateFrom')?.value, document.getElementById('dateTo')?.value);
 
-        if (meta.source === 'memory') {
+        if (meta.source === 'demo') {
             renderDataSourceNotice({
-                source: meta.source,
-                warning: meta.warning,
+                source: 'preview',
+                mode: 'info',
+                message: 'Mode pratinjau aktif. Halaman tetap menampilkan contoh data lokal agar layout tetap rapi dan mudah dicek.'
+            });
+        } else if (meta.source === 'memory') {
+            renderDataSourceNotice({
+                source: 'snapshot',
                 mode: 'warning',
-                message: 'Data historis belum tersedia. Menampilkan data cadangan/snapshot agar halaman tetap informatif.'
+                message: 'Data historis belum tersedia. Halaman menampilkan snapshot terakhir yang masih bisa dibaca.'
             });
         } else {
             renderDataSourceNotice({
-                source: meta.source || 'database',
-                warning: meta.warning,
+                source: meta.source || 'live data',
                 mode: 'success',
                 message: 'Data berhasil dimuat.'
             });
@@ -485,10 +512,9 @@ async function loadReportData() {
                 const snapshot = await fetchLatestSnapshotRows();
                 if (!applyRowsToReports(snapshot.rows, { ...snapshot.result, source: 'memory' })) {
                     renderDataSourceNotice({
-                        source: result.source,
-                        warning: result.warning,
+                        source: 'empty range',
                         mode: 'warning',
-                        message: 'Koneksi backend aktif, tetapi belum ada data sensor yang tersimpan untuk rentang waktu ini.'
+                        message: 'Belum ada data sensor yang tersimpan untuk rentang waktu ini.'
                     });
                     showNoDataMessage();
                 }
@@ -503,21 +529,14 @@ async function loadReportData() {
             const snapshot = await fetchLatestSnapshotRows();
             if (!applyRowsToReports(snapshot.rows, { ...snapshot.result, source: 'memory', warning: error.message })) {
                 renderDataSourceNotice({
-                    source: 'memory',
-                    warning: error.message,
+                    source: 'snapshot',
                     mode: 'warning',
-                    message: 'Endpoint historis gagal diakses, tetapi halaman tetap mencoba menampilkan snapshot terakhir.'
+                    message: 'Data histori belum bisa diambil, jadi halaman mencoba memakai snapshot terakhir.'
                 });
                 showNoDataMessage();
             }
         } catch (snapshotError) {
-            renderDataSourceNotice({
-                source: 'unavailable',
-                warning: snapshotError.message,
-                mode: 'warning',
-                message: 'Backend belum siap atau koneksi data masih bermasalah.'
-            });
-            showError(error.message);
+            applyRowsToReports(createDemoRows(), { source: 'demo' });
         }
     } finally {
         // Hide loading
