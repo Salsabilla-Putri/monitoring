@@ -240,6 +240,6 @@ td:last-child {
    RESPONSIVE (SAMA DENGAN HISTORY)
 ================================ */
 @media (max-width: 768px) {
-  .main-content { margin-left: 60px; }
+  .main-content { margin-left: 0; padding: 16px; padding-top: 104px; }
   table { display: block; overflow-x: auto; }
 }

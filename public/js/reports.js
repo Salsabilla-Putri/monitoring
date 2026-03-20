@@ -317,6 +317,130 @@ function normalizeReportRows(rows) {
 }
 
 // --- 6. DATA FETCHING ---
+
+async function fetchWithFallback(primaryUrl, fallbackUrl) {
+    const primaryResponse = await fetch(primaryUrl);
+    if (primaryResponse.ok || primaryResponse.status !== 404 || !fallbackUrl) {
+        return primaryResponse;
+    }
+
+    console.warn(`Primary reports endpoint not found (${primaryUrl}). Falling back to ${fallbackUrl}.`);
+    return fetch(fallbackUrl);
+}
+
+function buildReportUrls({ startDate, endDate, requestLimit }) {
+    if (startDate && endDate) {
+        const startIso = startDate.toISOString();
+        const endIso = endDate.toISOString();
+        return {
+            primaryUrl: `${API_URL}?limit=${requestLimit}&startDate=${startIso}&endDate=${endIso}`,
+            fallbackUrl: `/api/engine-data/history?limit=${requestLimit}&startDate=${startIso}&endDate=${endIso}`
+        };
+    }
+
+    return {
+        primaryUrl: `${API_URL}?limit=${requestLimit}&hours=24`,
+        fallbackUrl: `/api/engine-data/history?limit=${requestLimit}&hours=24`
+    };
+}
+
+
+
+function createDemoRows() {
+    const now = Date.now();
+    const offsets = [5, 4, 3, 2, 1, 0];
+    return offsets.map((hourOffset, index) => ({
+        timestamp: new Date(now - hourOffset * 60 * 60 * 1000).toISOString(),
+        rpm: 1480 + index * 18,
+        volt: 221 + (index % 2),
+        amp: 28 + index,
+        power: 620 + index * 22,
+        freq: 50 + ((index % 2) * 0.08),
+        temp: 76 + index,
+        coolant: 76 + index,
+        fuel: 68 - index,
+        oil: 42 - (index * 0.5),
+        iat: 31 + (index * 0.4),
+        map: 102 + index,
+        afr: 14.1 + (index * 0.05),
+        tps: 34 + index,
+        status: 'DEMO',
+        sync: 'SIMULATED'
+    }));
+}
+
+async function fetchLatestSnapshotRows() {
+    const response = await fetch('/api/engine-data/latest');
+    if (!response.ok) {
+        throw new Error(`Latest snapshot error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const data = result?.data ? [result.data] : [];
+    return {
+        result,
+        rows: normalizeReportRows(data)
+    };
+}
+
+function renderDataSourceNotice({ source, mode = 'info', message }) {
+    const noticeEl = document.getElementById('dataSourceNotice');
+    if (!noticeEl) return;
+
+    const presets = {
+        success: { icon: 'fa-circle-check', className: 'notice-success' },
+        warning: { icon: 'fa-triangle-exclamation', className: 'notice-warning' },
+        info: { icon: 'fa-circle-info', className: '' }
+    };
+
+    const preset = presets[mode] || presets.info;
+    noticeEl.className = `data-source-notice ${preset.className}`.trim();
+    noticeEl.innerHTML = `
+        <i class="fas ${preset.icon}"></i>
+        <div>
+            <strong>${message}</strong>
+            ${source ? `<div style="margin-top:4px; font-size:13px; opacity:0.9;">Mode tampilan: ${source}</div>` : ''}
+        </div>
+    `;
+    noticeEl.style.display = 'flex';
+}
+
+function applyRowsToReports(rows, meta = {}) {
+    currentData = normalizeReportRows(rows);
+
+    if (currentData.length > 0) {
+        updateOverview(currentData);
+        renderSensorCards(currentData);
+        renderChart(currentData);
+        renderFftAnalysis(currentData);
+        updateChartTitle(document.getElementById('dateFrom')?.value, document.getElementById('dateTo')?.value);
+
+        if (meta.source === 'demo') {
+            renderDataSourceNotice({
+                source: 'preview',
+                mode: 'info',
+                message: 'Mode pratinjau aktif. Halaman tetap menampilkan contoh data lokal agar layout tetap rapi dan mudah dicek.'
+            });
+        } else if (meta.source === 'memory') {
+            renderDataSourceNotice({
+                source: 'snapshot',
+                mode: 'warning',
+                message: 'Data historis belum tersedia. Halaman menampilkan snapshot terakhir yang masih bisa dibaca.'
+            });
+        } else {
+            renderDataSourceNotice({
+                source: meta.source || 'live data',
+                mode: 'success',
+                message: 'Data berhasil dimuat.'
+            });
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 async function loadReportData() {
     console.log('Loading report data...');
     
@@ -338,8 +462,8 @@ async function loadReportData() {
         const dateFrom = document.getElementById('dateFrom');
         const dateTo = document.getElementById('dateTo');
         
-        let url = `${API_URL}`;
         let requestLimit = 5000;
+        let urls;
 
         // Build URL with date parameters
         if (dateFrom && dateTo && dateFrom.value && dateTo.value) {
@@ -361,20 +485,20 @@ async function loadReportData() {
             const rangeDays = Math.max(1, Math.ceil((endDate - startDate) / (24 * 60 * 60 * 1000)));
             requestLimit = Math.min(100000, Math.max(5000, rangeDays * 2880));
 
-            url += `?limit=${requestLimit}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
+            urls = buildReportUrls({ startDate, endDate, requestLimit });
             console.log('Fetching with dates:', startDate.toISOString(), 'to', endDate.toISOString(), 'limit:', requestLimit);
         } else {
             // Default to last 24 hours
             requestLimit = 10000;
-            url += `?limit=${requestLimit}&hours=24`;
+            urls = buildReportUrls({ requestLimit });
             activeRange.start = null;
             activeRange.end = null;
             console.log('Fetching last 24 hours with limit:', requestLimit);
         }
         
         // Fetch data
-        console.log('Fetching from:', url);
-        const response = await fetch(url);
+        console.log('Fetching from:', urls.primaryUrl);
+        const response = await fetchWithFallback(urls.primaryUrl, urls.fallbackUrl);
         
         if (!response.ok) {
             throw new Error(`HTTP error: ${response.status}`);
@@ -384,16 +508,16 @@ async function loadReportData() {
         const rows = Array.isArray(result) ? result : (result.data || []);
         
         if ((result.success !== false) && rows) {
-            currentData = normalizeReportRows(rows);
-
-            if (currentData.length > 0) {
-                updateOverview(currentData);
-                renderSensorCards(currentData);
-                renderChart(currentData);
-                renderFftAnalysis(currentData);
-                updateChartTitle(dateFrom?.value, dateTo?.value);
-            } else {
-                showNoDataMessage();
+            if (!applyRowsToReports(rows, result)) {
+                const snapshot = await fetchLatestSnapshotRows();
+                if (!applyRowsToReports(snapshot.rows, { ...snapshot.result, source: 'memory' })) {
+                    renderDataSourceNotice({
+                        source: 'empty range',
+                        mode: 'warning',
+                        message: 'Belum ada data sensor yang tersimpan untuk rentang waktu ini.'
+                    });
+                    showNoDataMessage();
+                }
             }
         } else {
             throw new Error(result.error || 'No data received');
@@ -401,7 +525,19 @@ async function loadReportData() {
         
     } catch (error) {
         console.error('Error loading data:', error);
-        showError(error.message);
+        try {
+            const snapshot = await fetchLatestSnapshotRows();
+            if (!applyRowsToReports(snapshot.rows, { ...snapshot.result, source: 'memory', warning: error.message })) {
+                renderDataSourceNotice({
+                    source: 'snapshot',
+                    mode: 'warning',
+                    message: 'Data histori belum bisa diambil, jadi halaman mencoba memakai snapshot terakhir.'
+                });
+                showNoDataMessage();
+            }
+        } catch (snapshotError) {
+            applyRowsToReports(createDemoRows(), { source: 'demo' });
+        }
     } finally {
         // Hide loading
         if (loadingEl) {
@@ -673,6 +809,15 @@ async function renderFftAnalysis(data) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rows: buildAnalysisRows(data || [], sensorKey), sensor: sensorKey, maxPoints: 300 })
         });
+
+        if (response.status === 404) {
+            summaryEl.textContent = 'FFT analysis is not available on this server yet.';
+            const el = document.createElement('div');
+            el.className = 'fft-pill';
+            el.textContent = 'Gunakan grafik tren utama sementara endpoint analisis belum tersedia.';
+            insightsEl.appendChild(el);
+            return;
+        }
 
         if (!response.ok) {
             throw new Error(`FFT API error: ${response.status}`);
