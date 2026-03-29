@@ -14,17 +14,34 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // ─── DATABASE (cached connection untuk serverless) ────────────────────────────
-let isConnected = false;
+let connectionPromise = null;
+
 async function connectDB() {
-    if (isConnected) return;
-    await mongoose.connect(process.env.MONGODB_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-        serverSelectionTimeoutMS: 5000
+    // readyState: 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
+    if (mongoose.connection.readyState === 1) return; // sudah konek
+
+    // Kalau sedang dalam proses connecting, tunggu promise yang sama
+    // jangan buat koneksi baru (ini fix untuk race condition di serverless)
+    if (connectionPromise) return await connectionPromise;
+
+    if (!process.env.MONGODB_URI) {
+        throw new Error('MONGODB_URI environment variable is not set');
+    }
+
+    connectionPromise = mongoose.connect(process.env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 10000, // naikkan timeout jadi 10s
+        socketTimeoutMS: 20000,
+        // bufferCommands default true — jangan set false agar tidak error sebelum connect selesai
+    }).then(async () => {
+        console.log('✅ MongoDB Connected');
+        connectionPromise = null;
+        await loadThresholdsFromDB();
+    }).catch((err) => {
+        connectionPromise = null; // reset agar bisa retry di request berikutnya
+        throw err;
     });
-    isConnected = true;
-    console.log('✅ MongoDB Connected');
-    await loadThresholdsFromDB();
+
+    await connectionPromise;
 }
 
 // ─── SCHEMAS ──────────────────────────────────────────────────────────────────
@@ -83,8 +100,6 @@ async function loadThresholdsFromDB() {
 }
 
 // ─── MQTT (best-effort, non-blocking) ────────────────────────────────────────
-// CATATAN: MQTT di Vercel serverless bersifat best-effort.
-// Data real-time tetap dibaca dari MongoDB sebagai sumber utama.
 let latestData = {
     deviceId: 'GENERATOR #1', timestamp: new Date(),
     rpm: 0, volt: 0, amp: 0, power: 0, freq: 0, temp: 0, coolant: 0,
@@ -93,12 +108,17 @@ let latestData = {
 
 function initMQTT() {
     if (!process.env.MQTT_BROKER) return;
+    // FIX: Jangan init MQTT jika broker masih placeholder
+    if (process.env.MQTT_BROKER.includes('<host>')) {
+        console.warn('MQTT_BROKER masih placeholder, skip MQTT init');
+        return;
+    }
     try {
         const mqttClient = mqtt.connect(process.env.MQTT_BROKER, {
             username: process.env.MQTT_USERNAME,
             password: process.env.MQTT_PASSWORD,
             connectTimeout: 5000,
-            reconnectPeriod: 0 // Jangan auto-reconnect di serverless
+            reconnectPeriod: 0
         });
         mqttClient.on('connect', () => {
             console.log('✅ MQTT Connected');
@@ -166,6 +186,7 @@ app.use(async (req, res, next) => {
         await connectDB();
         next();
     } catch (err) {
+        console.error('DB connection error:', err.message);
         res.status(503).json({ success: false, error: 'Database connection failed', detail: err.message });
     }
 });
@@ -174,7 +195,8 @@ app.use(async (req, res, next) => {
 
 app.get('/api/health', (req, res) => res.json({
     status: 'healthy',
-    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    mongoUri: process.env.MONGODB_URI ? '✅ set' : '❌ missing'
 }));
 
 app.get('/api/engine-data/latest', async (req, res) => {
@@ -276,8 +298,6 @@ app.delete('/api/maintenance/:id', async (req, res) => {
     } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// FIX: Ganti spawnSync('python3') dengan implementasi JavaScript murni
-// Python tidak tersedia di Vercel serverless runtime
 app.post('/api/reports/analysis', async (req, res) => {
     try {
         const { rows = [], sensor = 'rpm', maxPoints = 300 } = req.body || {};
