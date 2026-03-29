@@ -53,7 +53,7 @@ const generatorDataSchema = new mongoose.Schema({
     sync: String, status: String, oil: Number, iat: Number,
     map: Number, afr: Number, tps: Number
 });
-const GeneratorData = mongoose.models.GeneratorData || mongoose.model('GeneratorData', generatorDataSchema);
+const GeneratorData = mongoose.models.GeneratorData || mongoose.model('GeneratorData', generatorDataSchema, 'generatordatas');
 
 const alertSchema = new mongoose.Schema({
     timestamp: { type: Date, default: Date.now },
@@ -62,13 +62,13 @@ const alertSchema = new mongoose.Schema({
     severity: { type: String, enum: ['low', 'medium', 'high', 'critical'], default: 'medium' },
     resolved: { type: Boolean, default: false }
 });
-const Alert = mongoose.models.Alert || mongoose.model('Alert', alertSchema);
+const Alert = mongoose.models.Alert || mongoose.model('Alert', alertSchema, 'alert');
 
 const configSchema = new mongoose.Schema({
     key: { type: String, unique: true },
     value: Object
 });
-const Config = mongoose.models.Config || mongoose.model('Config', configSchema);
+const Config = mongoose.models.Config || mongoose.model('Config', configSchema, 'configs');
 
 const maintenanceSchema = new mongoose.Schema({
     task: { type: String, required: true },
@@ -78,7 +78,7 @@ const maintenanceSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
     completedAt: Date
 });
-const Maintenance = mongoose.models.Maintenance || mongoose.model('Maintenance', maintenanceSchema);
+const Maintenance = mongoose.models.Maintenance || mongoose.model('Maintenance', maintenanceSchema, 'maintenance');
 
 // ─── THRESHOLDS ───────────────────────────────────────────────────────────────
 let ACTIVE_THRESHOLDS = {
