@@ -5,10 +5,8 @@
   <title>Gen-Track — Home Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="js/auth-guard.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
   <link rel="stylesheet" href="sidebar.css">
   <link rel="stylesheet" href="css/topbar.css">
   <link rel="stylesheet" href="css/dashboard.css">
@@ -19,118 +17,120 @@
   <div id="sidebar-container"></div>
 
   <div class="main-content">
-    
-    <!-- <div class="topbar">
-      <div class="topbar">
-        <div class="topbar-title">Dashboard</div> <div class="user-info" id="user-btn" style="cursor: pointer;">
-          <i class="fas fa-user"></i> <span>Pengguna</span>
-        </div>
-      </div>
-       <div class="topbar-title">Dashboard</div>
-      <div class="user-info">
-        <i class="fas fa-user"></i> <span>Pengguna</span>
-      </div> -->
-    <!-- </div> --> 
-     <div class="topbar">
-        <div class="topbar-title">Dashboard</div> <div class="user-info" id="user-btn" style="cursor: pointer;">
-          <i class="fas fa-user"></i> <span>Pengguna</span>
-        </div>
-      </div>
 
-    <div class="dashboard-container" style="padding: 20px;"> 
+    <div class="topbar">
+      <div class="topbar-title">Dashboard</div>
+      <div class="user-info" id="user-btn" style="cursor:pointer">
+        <i class="fas fa-user"></i>
+        <span id="welcome-user-top">Pengguna</span>
+      </div>
+    </div>
 
+    <div class="dashboard-container" style="padding-bottom:20px">
+
+      <!-- HERO -->
       <div class="hero">
         <div class="hero-content">
           <div id="clock" class="hero-time">--:--</div>
           <div class="hero-greeting">Welcome, <span id="welcome-user">User</span>!</div>
-          <div class="hero-quote">"Live Monitoring for Generator Health & Efficiency"</div>
+          <div class="hero-quote">"Live Monitoring for Generator Health &amp; Efficiency"</div>
         </div>
       </div>
 
+      <!-- OVERVIEW CARDS -->
       <div class="overview-cards">
         <div class="overview-card">
           <div class="overview-icon icon-prm"><i class="fas fa-tachometer-alt"></i></div>
-          <div class="overview-content">
-            <div class="overview-value" id="val-rpm">--</div>
+          <div>
+            <div class="overview-value" id="val-rpm">-- RPM</div>
             <div class="overview-label">Engine Speed</div>
           </div>
         </div>
         <div class="overview-card">
           <div class="overview-icon icon-sec"><i class="fas fa-thermometer-half"></i></div>
-          <div class="overview-content">
-            <div class="overview-value" id="val-temp">--</div>
+          <div>
+            <div class="overview-value" id="val-temp">-- °C</div>
             <div class="overview-label">Coolant Temp</div>
           </div>
         </div>
         <div class="overview-card">
           <div class="overview-icon icon-wrn"><i class="fas fa-exclamation-triangle"></i></div>
-          <div class="overview-content">
+          <div>
             <div class="overview-value" id="val-alerts">0</div>
             <div class="overview-label">Active Alerts</div>
           </div>
         </div>
         <div class="overview-card">
           <div class="overview-icon icon-dng"><i class="fas fa-bolt"></i></div>
-          <div class="overview-content">
-            <div class="overview-value" id="val-volt">--</div>
+          <div>
+            <div class="overview-value" id="val-volt">-- V</div>
             <div class="overview-label">System Voltage</div>
           </div>
         </div>
       </div>
 
+      <!-- GRID 3 -->
       <div class="grid-3">
+
         <div class="card">
           <h3><i class="fas fa-cogs"></i> Engine Status</h3>
-          <div class="list-row">
-            <span>Sync Status:</span> <span id="engSync" class="st-err">--</span>
-          </div>
-          <div class="list-row">
-            <span>Engine State:</span> <span id="engStat" class="st-err">--</span>
-          </div>
-          <div class="list-row">
-            <span>Today's Active:</span> <span id="engToday" class="st-ok">0h 0m</span>
-          </div>
-          <div class="list-row">
-            <span>Fuel Level:</span> <span id="fuelLevel" class="st-ok">--%</span>
+          <div class="card-body">
+            <div class="list-row"><span>Sync Status</span>  <span id="engSync" class="st-err">--</span></div>
+            <div class="list-row"><span>Engine State</span> <span id="engStat" class="st-err">--</span></div>
+            <div class="list-row"><span>Today's Active</span><span id="engToday" class="st-ok">0h 0m</span></div>
+            <div class="list-row"><span>Fuel Level</span>   <span id="fuelLevel" class="st-ok">--%</span></div>
           </div>
         </div>
 
         <div class="card">
           <h3><i class="fas fa-clipboard-list"></i> Recent Activity</h3>
-          <div id="maintenanceContainer">
-             <div style="text-align:center; padding:20px; color:#aaa">
-                 <i class="fas fa-circle-notch fa-spin"></i> Loading data...
-             </div>
+          <div class="card-body" id="maintenanceContainer">
+            <div style="text-align:center;padding:24px;color:#aaa">
+              <i class="fas fa-circle-notch fa-spin"></i> Loading data...
+            </div>
           </div>
         </div>
 
         <div class="card">
           <h3><i class="fas fa-heartbeat"></i> System Health</h3>
-          <div class="list-row"><span>Voltage:</span> <span id="st-volt">--</span></div>
-          <div class="list-row"><span>Current:</span> <span id="st-amp">--</span></div>
-          <div class="list-row"><span>Frequency:</span> <span id="st-freq">--</span></div>
-          <div class="list-row"><span>Fuel Level:</span> <span id="st-fuel">--</span></div>
-          <div class="list-row"><span>AFR:</span> <span id="st-afr">--</span></div>
+          <div class="card-body">
+            <div class="list-row"><span>Voltage</span>    <span id="st-volt">--</span></div>
+            <div class="list-row"><span>Current</span>    <span id="st-amp">--</span></div>
+            <div class="list-row"><span>Frequency</span>  <span id="st-freq">--</span></div>
+            <div class="list-row"><span>Fuel Level</span> <span id="st-fuel">--</span></div>
+            <div class="list-row"><span>AFR</span>        <span id="st-afr">--</span></div>
+          </div>
         </div>
+
       </div>
 
+      <!-- GRID 2 -->
       <div class="grid-2">
+
         <div class="card">
-          <h3><i class="fas fa-chart-line"></i> Active Time History</h3>
-          <div class="chart-box">
-            <canvas id="chartActive"></canvas>
+          <h3><i class="fas fa-chart-bar"></i> Active Time History</h3>
+          <div class="card-body">
+            <div class="chart-box">
+              <canvas id="chartActive"></canvas>
+            </div>
           </div>
         </div>
 
         <div class="card">
           <h3><i class="fas fa-bell"></i> Recent Alerts</h3>
-          <div id="alertContainer">
-             <div style="text-align:center; padding:20px; color:#aaa">Loading alerts...</div>
+          <div class="card-body">
+            <div id="alertContainer">
+              <div style="text-align:center;padding:24px;color:#aaa">Loading alerts...</div>
+            </div>
           </div>
         </div>
+
       </div>
 
-    </div> </div> <script src="js/sidebar.js"></script> 
+    </div>
+  </div>
+
+  <script src="js/sidebar.js"></script>
   <script src="js/dashboard.js"></script>
 </body>
 </html>
