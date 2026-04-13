@@ -19,6 +19,12 @@ const SENSORS = {
     afr: { name: 'AFR', unit: '', icon: 'fas fa-burn', color: '#3b82f6' }
 };
 
+const SENSOR_CARD_THEME = {
+    accent: '#1745a5',
+    iconBg: '#dbeafe',
+    iconColor: '#1745a5'
+};
+
 const SENSOR_LIMITS = {
     rpm: { min: 0, max: 5000 },
     volt: { min: 0, max: 300 },
@@ -1323,22 +1329,16 @@ function renderSensorCards(data) {
             statusClass = 'status-warning';
         }
         
-        const accentColor = statusClass === 'status-critical'
-            ? '#dc2626'
-            : statusClass === 'status-warning'
-                ? '#f97316'
-                : config.color;
-
         const card = document.createElement('div');
         card.className = 'sensor-card';
         card.dataset.sensor = key;
-        card.style.setProperty('--sensor-accent', accentColor);
+        card.style.setProperty('--sensor-accent', SENSOR_CARD_THEME.accent);
         card.classList.toggle('active-sensor', selectedSensors.includes(key));
         
         card.innerHTML = `
             <div class="sensor-header">
                 <div class="sensor-name">
-                    <div class="sensor-icon" style="background: ${config.color}20; color: ${config.color}">
+                    <div class="sensor-icon" style="background: ${SENSOR_CARD_THEME.iconBg}; color: ${SENSOR_CARD_THEME.iconColor}">
                         <i class="${config.icon}"></i>
                     </div>
                     <span class="sensor-title-text">${config.name}</span>
